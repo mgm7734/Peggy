@@ -1,0 +1,7 @@
+name = "Peggy"
+uuid = "38c9c6a9-dcc3-4413-b33b-c21eed44f456"
+authors = ["Mark Mendel <mmendel@meinergy.com> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1.8"
