@@ -2,7 +2,7 @@
 
 julia_version = "1.8.0"
 manifest_format = "2.0"
-project_hash = "1ac64239ed32432557e19f5372f53ad1f4bf3bac"
+project_hash = "51a0df1d8bf1d7d5ba6c191acb68d8b2663fc1dd"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -62,16 +62,16 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
+[[deps.Peggy]]
+path = ".."
+uuid = "73a55e99-9441-455f-8acb-d9f8f3d4403a"
+version = "0.1.0"
+
 [[deps.Parsers]]
 deps = ["Dates"]
 git-tree-sha1 = "3d5bf43e3e8b412656404ed9466f1dcbf7c50269"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.4.0"
-
-[[deps.Peggy]]
-path = ".."
-uuid = "38c9c6a9-dcc3-4413-b33b-c21eed44f456"
-version = "0.1.0"
 
 [[deps.Printf]]
 deps = ["Unicode"]

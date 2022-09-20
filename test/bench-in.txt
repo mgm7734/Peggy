@@ -1,0 +1,20 @@
+
+  START: SP grammar EOF
+  grammar: production (SP production)*
+  production: identifier ":" rule
+  rule: altrule
+  altrule: seqrule ("/" SP seqrule)*
+  seqrule: unaryrule+
+  unaryrule: primrule QUESTION / primrule "*" SP / primrule "+" SP / primrule
+  primrule: stringlit / "(" SP rule ")" SP
+
+  identifier: identstart identcont* SP
+  identstart: LETTER / "_"
+  identcont: identstart / DIGIT
+
+  stringlit: "\"" (!"\"" quotedchar)* "\"" SP
+  quotedchar: "\\" ("n" / "r" / "t" / "\\" / "\"") / !"\\" anych
+
+  SP: (" " / "\t" / NL / linecomment)*
+  NL: "\r" "\n"? / "\n"
+  QUESTION: "?" SP
