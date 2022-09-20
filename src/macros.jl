@@ -8,12 +8,36 @@ Create a PEG parser from grammar expression.
 
 ```jldoctest ; output = false
 @grammar begin
-    grammar_expression = peg_expression
-    peg_expression = [
+    grammar_definition = [ "begin" rule (rule stmt_sep)... "end" ]
+
+    rule = [ identifier "=" peg_expression ]
+    peg_expression = alt_expr
+    alt_expr = [
+        "[" seq_expr (row_sep seq_expr)... "]"
+        repeat_expr ("/" repeat_expr)...
+    ]
+    seq_expr 
+    [
         literal / regex_character_class
     ]
+    repeat_expr = [ 
+        primary_expr seperator_expr bounds_expr
+        primary_expr bounds_expr
+        primary_expr
+    ]
+    seperator_expr = [ ":" primary_expr ]
+    bounds_expr = [ 
+        ":" min:number ":" max:number
+        ":" min:number "..."
+        "..."
+    ]
+    number = anych("0-9"):1...
+
     regex_character_class = anych("[:alpha:]_") 
     literal = "an string"
+
+    stmt_sep = (";" / "\n"):1...
+    row_sep = ";" / "\n":1...
 end;
 
 # output
@@ -142,23 +166,6 @@ function make_alt(args)
     end
 end
 
-e = :(
-    begin
-        start = [expr not(anych())] |> first
-        expr = [
-            [expr "+" term] |> r -> r[1] + r[3]
-            [expr "-" term] |> r -> r[1] - r[3]
-            term
-        ]
-        term = [
-            [term "*" prim] |> r -> r[1] * r[3]
-            [term "/" prim] |> r -> r[1] / r[3]
-            prim
-        ]
-        prim = [
-            number
-            ["(" expr ")"] |> r -> r[2]
-        ]
-        number = [anych("[:digit:]") many(anych("[:digit:]"))] |> r -> parse(Int, *(r[1], (r[2])...))
-    end
-)
+#### auxillary functions
+
+lit(s; skiptrailing=r"\s*") = Peggy.Literal(s, skiptrailing)

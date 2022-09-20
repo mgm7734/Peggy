@@ -4,7 +4,9 @@ abstract type Parser end
 
 struct Literal <: Parser
     value
+    skiptrailing
 end
+Literal(s) = Literal(s, r"\s*")
 
 abstract type RegexParser <: Parser end
 

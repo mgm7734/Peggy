@@ -14,8 +14,9 @@ function Base.showerror(io::IO, ex::ParseException)
 end
 
 function printpos(io::IO, s::AbstractString, pos::Int)
-    # print(io, "at index $pos in: $s")
-    # return
+    println(io, "at index $pos in: $s")
+    return
+    # TODO: use Regex
     bol = something(findlast('\n', SubString(s, 1, pos)), 0) + 1
     eol = something(findnext(==('\n'), s, pos), length(s))
     if pos != eol

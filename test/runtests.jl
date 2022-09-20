@@ -2,20 +2,29 @@ using Peggy
 using Test
 
 @testset "Peggy.jl" begin
+
+    @testset "literal" begin
+        p = parser("abc")
+        @test runpeg(p, "abcd") == "abc"
+        @test_throws ["ParseException","1", "abc"] runpeg(p, "aboops")
+
+        p = parser("a", "b", "c")
+        @test runpeg(p, "a bcd") == ( "a", "b", "c" )
+        @test_throws ["ParseException","3", "c"] runpeg(p, "aboops")
+
+        p = parser(oneof("cat", "dog"))
+        @test runpeg(p, "catetonic") == "cat"
+        @test runpeg(p, "dogma") == "dog"
+        @test_throws ["ParseException", "1", "cat", "dog"] runpeg(p, "do gma")
+
+        p = parser(lit("a"; skiptrailing=r"X"), "b", "c")
+        @test runpeg(p, "abcd") == ( "a", "b", "c" )
+        @test runpeg(p, "aXbcd") == ( "a", "b", "c" )
+        @test_throws ["ParseException"] runpeg(p, "aXXbc")
+        @test_throws ["ParseException"] runpeg(p, "a bc")
+    end
+
     p = parser("abc")
-    #=
-    @test runpeg(p, "abcd") == "abc"
-    @test_throws ["ParseException","1", "abc"] runpeg(p, "aboops")
-
-    p = parser("a", "b", "c")
-    @test runpeg(p, "abcd") == ( "a", "b", "c" )
-    @test_throws ["ParseException","3", "c"] runpeg(p, "aboops")
-
-    p = parser(oneof("cat", "dog"))
-    @test runpeg(p, "catetonic") == "cat"
-    @test runpeg(p, "dogma") == "dog"
-    @test_throws ["ParseException", "1", "cat", "dog"] runpeg(p, "doh!")
-    =#
     p = many(oneof("a", "b"))
     @test runpeg(p, "") == []
     @test runpeg(p, "abbabca") == ["a", "b", "b", "a", "b"]
@@ -125,8 +134,8 @@ using Test
     end
 
     @testset "LookAhead" begin
-        p = @peg([r:"hello" followedby(" ")])
-        @test p("hello world") == "hello"
+        p = @peg([r:"hello" followedby(",")])
+        @test p("hello, world!") == "hello"
         @test_throws ["ParseException"] p("hello!")
     end
 end

@@ -81,8 +81,15 @@ Parsers are callable.
 nextstate!(st::State, parser) = calcnextstate!(st, parser)
 
 function calcnextstate!(st::State, p::Literal)
-    if startswith(remainingtext(st), p.value)
-        succeed!(st, p.value, length(p.value))
+    t = remainingtext(st)
+    if startswith(t, p.value)
+        consume = length(p.value)
+        m = match(p.skiptrailing, SubString(t, 1+consume))
+        # @info "literal" t consume p.skiptrailing m SubString(t, consume)
+        if m !== nothing
+            consume += length(m.match)
+        end
+        succeed!(st, p.value, consume)
     else
         fail!(st, p)
     end
