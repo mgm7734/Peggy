@@ -36,7 +36,10 @@ end
 
 struct Many <: Parser
     expr::Parser
+    min
+    max
 end
+Many(e) = Many(e, 0, missing)
 
 struct Not <: Parser
     expr::Parser

@@ -4,16 +4,31 @@ const MAPDELIM = :(|>)
 const NAMEOP = :(:)
 
 """
-Create a PEG parser from grammar expression.
+    @grammar begin grammar_rules
+    @grammar peg_expr peg_expr...
+
+Create a PEG parser.
 
 ```jldoctest ; output = false
 @grammar begin
-    grammar_definition = [ "begin" rule (rule stmt_sep)... "end" ]
+    grammar_rule = rule_name "=" expression
 
-    rule = [ identifier "=" peg_expression ]
-    peg_expression = alt_expr
+    expression = [
+        matrix_alt_expr
+        scalar_expression
+    ]
+    matrix_alt_expr = [
+        "[" sequence_item... ((";" / "\n") sequence_item...)... "]"
+    ]
+    sequence = [
+        "[" sequence_item... "{" action "}" "]"
+        "[" sequence_item... "]"
+    ]
+    sequence_item = [
+
+    ]
+
     alt_expr = [
-        "[" seq_expr (row_sep seq_expr)... "]"
         repeat_expr ("/" repeat_expr)...
     ]
     seq_expr 
@@ -58,13 +73,18 @@ macro peg(expr)
     make_peg(expr)
 end
 
+macro peg(expr...)
+    make_peg(:([$(expr...)]))
+end
+
 function make_grammar(e::Expr)
     @assert Meta.isexpr(e, :block) "Expected a block, got $e"
     rules = map(make_rule, filter(x -> x isa Expr, e.args))
     :(grammar($(rules...)))
 end
+
 function make_rule(e)
-    if Meta.isexpr(e, RULEARROW)
+    if Meta.isexpr(e, :(=))
         (sym, expr) = e.args
         @assert Meta.isidentifier(sym)
         alts = make_peg(expr)
@@ -80,41 +100,35 @@ function make_rule(e)
     end
 end
 
-make_peg(e::String) = :(Peggy.Literal($e))
-make_peg(e::Regex) = :(Peggy.GeneralRegexParser($e))
-make_peg(sym::Symbol) = :(Peggy.GramRef($(Expr(:quote, sym))))
-
-function make_peg(e::Expr)
-    if e.head in [:vect, :hcat, :row]
+function make_peg(e)
+    if Meta.isexpr(e, :block)
+        rules = map(make_rule, filter(x -> x isa Expr, e.args))
+        :(grammar($(rules...)))
+    elseif Meta.isexpr(e, [:vect, :hcat, :row])
         make_seq(e)
-    elseif e.head == :vcat
+    elseif Meta.isexpr(e, :vcat)
         make_alt(e.args)
-        # precedence is wrong:  name:expr... == (name:expr)...
-    elseif e.head == :(...)
-        peg = make_peg(e.args[1])
-        :(Peggy.many($peg))
-    elseif Meta.isexpr(e, :call)
-        (op, args...) = e.args
-        if op == ALTDELIM
-            make_alt(args)
-        elseif op == MAPDELIM
-            peg = make_peg(args[1])
-            fn = args[2]
-            :(Peggy.Map($fn, $peg))
-        elseif op == :(!)
-            peg = make_peg(args[1])
-            :(Peggy.not($peg))
-        #elseif op == :(&)
-        #    peg = make_peg(args[1])
-        #    ahead = make_peg(args[2])
-        #    :(Peggy.LookAhead($peg))
-        else
-            e
-        end
     else
-        :(pegparser($e))
+        make_repeat(e)
     end
 end
+
+function make_alt(args)
+    pegs = iteratetree(args) do e
+        if iscall(e, :(/)) #Meta.isexpr(e, :call) && e.args[1] == ALTDELIM
+            (nothing, e.args[2:end])
+        else
+            make_seq(e), nothing
+        end
+    end |> collect
+    if length(pegs) == 1
+        pegs[1]
+    else
+        :(Peggy.OneOf([$(pegs...)]))
+    end
+end
+
+make_seq(e) = make_repeat(e)
 
 function make_seq(e::Expr)
     args = e.args
@@ -125,19 +139,7 @@ function make_seq(e::Expr)
         action = nothing
     end
 
-    namedpegs = map(args) do expr
-        name = nothing
-        if expr isa Symbol
-            name = expr
-        elseif Meta.isexpr(expr, :call) && expr.args[1] == NAMEOP
-            name = expr.args[2]
-            if name == :_
-                name = nothing
-            end
-            expr = expr.args[3]
-        end
-        make_peg(expr), name
-    end
+    namedpegs = map(make_seqitem, args)
     names = tuple((n for (_, n) in namedpegs if n !== nothing)...)
     # @info "namedpegs" namedpegs n=[n for (_, n) in namedpegs if n !== nothing] names
 
@@ -148,6 +150,8 @@ function make_seq(e::Expr)
         callable = :(($(names...),) -> $action)
     elseif length(names) == 1
         callable = identity
+    elseif length(names) == 0
+        callable = :(() -> ())
     else
         callable = :(NamedTuple{$names} ∘ tuple)
     end
@@ -157,14 +161,88 @@ function make_seq(e::Expr)
     :(Peggy.MappedSequence($callable, [$(namedparsers...)]))
 end
 
-function make_alt(args)
-    pegs = map(make_peg, args)
-    if length(pegs) == 1
-        pegs[1]
+make_seqitem(s::Symbol) = ( make_primary(s), s )
+
+function make_seqitem(expr)
+    @info "seqitem" expr
+    name = nothing
+    #if expr isa Symbol
+    #    name = expr
+    #    return make_primary(expr), expr
+    #end
+    #if Meta.isexpr(expr, :call) && expr.args[1] == :(:) && expr.args[2] isa Symbol
+    if Meta.isexpr(expr, :(=))
+        name = expr.args[1]
+        if name === :_
+            name = nothing
+        end
+        expr = expr.args[2]
+    end
+    make_repeat(expr), name
+end
+
+make_repeat(e) = make_primary(e)
+function make_repeat(expr::Expr)
+    @info "make_repeat" expr
+    e = expr
+    min = 0
+    max = missing
+    unbounded = false
+    if expr.head == :(...)
+        unbounded = true
+        e = expr.args[1]
+    end 
+    if Meta.isexpr(e, :call) && e.args[1] == :(:)
+        (e, min, max) = [e.args[2:end]..., missing, missing]
+        ismissing(max) || !unbounded || error("Cannot specify both max repitions $max and '...': $expr")
+    end
+
+    peg = make_primary(e)
+    @info "mk repeat" e min max peg
+
+    if min == 0 && ismissing(max) && !unbounded
+        peg
     else
-        :(Peggy.OneOf([$(pegs...)]))
+        :(Many($peg, $min, $max))
     end
 end
+
+make_primary(e::String) = :(Peggy.Literal($e))
+make_primary(e::Regex) = :(Peggy.GeneralRegexParser($e))
+make_primary(sym::Symbol) = :(Peggy.GramRef($(Expr(:quote, sym))))
+
+function make_primary(expr::Expr)
+    # if expr isa Symbol
+    #     return :(GramRef($expr))
+    # end
+    if !Meta.isexpr(expr, :call)
+        error("huh? $expr")
+        #return make_primary(expr)
+    end
+    (op, args...) = expr.args
+    if op == ALTDELIM
+        make_alt(args)
+    elseif op == MAPDELIM
+        peg = make_peg(args[1])
+        fn = args[2]
+        :(Peggy.Map($fn, $peg))
+    elseif op == :(!)
+        peg = make_peg(args[1])
+        :(Peggy.not($peg))
+    else
+        expr
+    end
+end
+
+iscall(e, sym) = Meta.isexpr(e, :call) && first(e.args) == sym
+
+iteratetree(f, args) = 
+    #Iterators.flatten((iter === nothing ? [v] : iter) for a in args for (v, iter) in [@show(f(a))])
+    (r  for a in args 
+        for (v, itr) in [f(a)] 
+        for r in (itr === nothing ? [v] : iteratetree(f, itr)))
+        
+    
 
 #### auxillary functions
 

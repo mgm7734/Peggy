@@ -146,10 +146,16 @@ end
 
 function calcnextstate!(st::State, parser::Many)
     values = []
-    while true
+    start = mark(st)
+    while ismissing(parser.max) || length(values) < parser.max
         nextstate!(st, parser.expr)
         if isfail(st)
-            return succeed!(st, [values...])
+            if length(values) >= parser.min
+                return succeed!(st, [values...])
+            else
+                reset(st, start)
+                return fail!(st)
+            end
         end
         push!(values, value(st))
     end

@@ -122,11 +122,11 @@ using Test
                 prim
             ]
             prim = [
-                number _:space # "_:" un-names the expression
+                number _=space # "_:" un-names the expression
                 "(" expr ")"
             ]
             number = [
-                D:anych("[:digit:]") DS:(anych("[:digit:]")...) {parse(Int, *(D, DS...))}
+                D=anych("[:digit:]") DS=(anych("[:digit:]")...) {parse(Int, *(D, DS...))}
             ]
             space = many(anych("[:space:]"))
         end
@@ -134,8 +134,39 @@ using Test
     end
 
     @testset "LookAhead" begin
-        p = @peg([r:"hello" followedby(",")])
+        p = @peg r="hello" followedby(",")
         @test p("hello, world!") == "hello"
         @test_throws ["ParseException"] p("hello!")
+    end
+
+    @testset "sequnce results" begin
+        @test (@peg "a")("a") == "a"
+        @test (@peg "1" "2" "3")("123") == ()
+        @test (@peg "1" a="2" "3")("123") == "2"
+        @test (@peg a="1" "2" b="3")("123") == (a="1", b="3")
+        @test (@peg "1" "2" "3")("123") == ()
+        p = @grammar begin
+            tests = nonsequence / nameless_seq / one_name / many_names
+            nonsequence = "nonseq"
+            nameless_seq = [ "no" _=name "s" ] 
+            one_name = [ "one" name ]
+            many_names = [ "has" a="many" b=name name "s" ]
+            name = "name"
+        end
+        p("nonseq") == "nonseq"
+        p("no names") == ()
+        p("one name") == "name"
+        p("has many name names") == (a="many", b="name", name="name")
+    end
+    @testset "bounds_expr" begin
+        p = @grammar begin
+            start = [many max minmax minmany]
+            many = "A"...
+            max = "B":2
+            minmax = "C":1:2
+            minmany = "D":1...
+            # named_minmax = [ n="oy":1:2 ; m=(many / minmax):1:2 ] 
+        end
+        @test p("B B C D") == (many=[], min=["B","B"], minmax=["C"], minmany=["D"])
     end
 end

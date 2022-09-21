@@ -17,7 +17,9 @@ Pretty good error messages
 ## Quickstart
 ## Creating Parsers
 
-Use [`@grammar`](@ref) to construct parsers.
+Use [`@grammar`](@ref) to construct parsers.  It uses a slightly arcane syntax to avoid 
+excessive punctuation while working with Julia's syntax. Julia's lack of suffix operators 
+presented a particular challenge. Great advantage (abuse?) was taken of matrix notation.
 
 ```jldoctest
 julia> using Peggy
