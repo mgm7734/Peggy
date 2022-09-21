@@ -167,6 +167,6 @@ using Test
             minmany = "D":1...
             # named_minmax = [ n="oy":1:2 ; m=(many / minmax):1:2 ] 
         end
-        @test p("B B C D") == (many=[], min=["B","B"], minmax=["C"], minmany=["D"])
+        @test p("B B C D") == (many=[], max=["B","B"], minmax=["C"], minmany=["D"])
     end
 end

@@ -3,42 +3,59 @@ const ALTDELIM = :(/)
 const MAPDELIM = :(|>)
 const NAMEOP = :(:)
 
-"""
+@doc raw"""
     @grammar begin grammar_rules
     @grammar peg_expr peg_expr...
 
 Create a PEG parser.
 
-```jldoctest ; output = false
+``` jldoctest ; output = false
 @grammar begin
+    
+    parser = grammar_rule:1... / expresion
+
     grammar_rule = rule_name "=" expression
 
+    rule_name = Identifier
+
     expression = [
-        matrix_alt_expr
+        matrix_expr
         scalar_expression
     ]
-    matrix_alt_expr = [
-        "[" sequence_item... ((";" / "\n") sequence_item...)... "]"
+    matrix_expr = [
+        "[" alt_line ((";" / "\n") alt_line)... "]"
     ]
-    sequence = [
-        "[" sequence_item... "{" action "}" "]"
-        "[" sequence_item... "]"
+    alt_line = seqence_body
+
+    sequence_body = [
+        sequence_item... "{" action "}"
+        sequence_item... 
     ]
     sequence_item = [
-
+        (rule_name "="):1 expression
     ]
-
+    expression = alt_expr
     alt_expr = [
-        repeat_expr ("/" repeat_expr)...
+        sequence_expr ("/" sequence_expr)...
     ]
-    seq_expr 
-    [
-        literal / regex_character_class
+    sequence_expr = [
+        "[" sequency_body "]"
+        repeat_expr
     ]
     repeat_expr = [ 
         primary_expr seperator_expr bounds_expr
         primary_expr bounds_expr
         primary_expr
+    ]
+    primary_expr 
+    [
+        String  # literal match
+        Regex                       # these may cause spurious left-recursion detections and slow parsing
+        "anych(" String ")"         # a character class ala Regex, e.g. "_\s[:digit:]a-f"
+        "anych()"
+        "!" primary
+        "[" sequence_body "]"
+        "(" expression ")"
     ]
     seperator_expr = [ ":" primary_expr ]
     bounds_expr = [ 
@@ -48,22 +65,16 @@ Create a PEG parser.
     ]
     number = anych("0-9"):1...
 
-    regex_character_class = anych("[:alpha:]_") 
-    literal = "an string"
-
-    stmt_sep = (";" / "\n"):1...
-    row_sep = ";" / "\n":1...
+    # Julia parsed items
+    String = "\"" native_syntax "\""
+    Regex = "r\"" native_syntax "\""
+    Identifier = native_syntax
+    native_syntax = "Julia"
 end;
 
 # output
 
-grammar(:grammar_expression,
-:peg_expression => oneof(:literal, :regex_character_class),
-:grammar_expression => :peg_expression,
-:literal => "an string",
-:regex_character_class => anych("[:alpha:]_"),
 ```
-
 """
 macro grammar(block)
     make_grammar(block)
@@ -164,7 +175,7 @@ end
 make_seqitem(s::Symbol) = ( make_primary(s), s )
 
 function make_seqitem(expr)
-    @info "seqitem" expr
+    # @info "seqitem" expr
     name = nothing
     #if expr isa Symbol
     #    name = expr
@@ -183,7 +194,7 @@ end
 
 make_repeat(e) = make_primary(e)
 function make_repeat(expr::Expr)
-    @info "make_repeat" expr
+    # @info "make_repeat" expr
     e = expr
     min = 0
     max = missing
@@ -198,7 +209,7 @@ function make_repeat(expr::Expr)
     end
 
     peg = make_primary(e)
-    @info "mk repeat" e min max peg
+    # @info "mk repeat" e min max peg
 
     if min == 0 && ismissing(max) && !unbounded
         peg

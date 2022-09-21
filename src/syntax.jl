@@ -94,7 +94,7 @@ oneof(pegexpr...) = OneOf(map(pegparser, pegexpr))
 
 Create a parser that matches zero or more repititions of `parser(pegexpr)`; return a vector of results.
 """
-many(pegexpr...) = Many(pegparser(pegexpr...))
+many(pegexpr...) = Many(pegparser(pegexpr...),0,missing)
 
 """
     not(p)
