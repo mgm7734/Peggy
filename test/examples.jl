@@ -1,5 +1,6 @@
 using Peggy
 
+#=
 """
 Adapted from [this article](https://pdos.csail.mit.edu/~baford/packrat/thesis/thesis.pdf)
 """
@@ -85,3 +86,80 @@ peg_grammar = grammar(
         :LETTER => anych("[:alpha:]"),
         :NEWLINE => oneof("\r\n", "\r", "\n"),
     )
+=#
+@peg begin
+    parser =  grammar || expression
+    
+    grammar = { # just Julia syntax for a block of `rule` productions
+        _begin r1=rule rs={ _sep1 rule }*_  _end            :> { Peggy.Grammar(r1.first, Dict(rule, rs...)) }
+        "(" r1=rule _sep2 rs={ _sep2 rule } ")"             :> { Peggy.Grammar(r1.first, Dict(rule, rs...)) }
+    } 
+    _begin = { "begin" [ _sep1 ] }
+    _sep1 = (";" | "\n")+_
+    _sep2 = { 
+        ";" (";" || "\n")*_ 
+    }
+    rule = { rule_name "=" expession                        :> { rule_name => expression } }
+    rule_name = Identifier        |> Symbol
+    
+    expression = {
+        # `expr |> f1=expr |> fn` is valid if f1 returns a `Parser`.
+        expresion "|>" fn=julia_expression                   :> { Peggy.Map(fn, alt_expr) }
+        alt_expr
+    }
+    alt_expr =  {
+        a1=rep_expr as={"||" rep_expr}*_                    :> { OneOf(a1, as...)}
+        rep_expr
+    }
+    rep_expr= {
+        primary_expr "*" c=cardnality                       :> { Many(neg_expr, c.min, c.max) }
+        primary_expr "+" "_"                                :> { Many(neg_expr, 1, nothing) }
+        "[" primary_expr "]"                                :> { Many(neg_expr, 0, 1) }
+        "!" primary_expr                                |> Peggy.Not
+    }
+    cardnality = {
+        "_"                                             :> { (min=0, max=nothing) } 
+        "(" min=Number ":" max=Number ")"
+        Number                                          :> { min=Number, max=nothing }
+    }
+    primary_expr = {
+        String                                          |> Peggy.Literal
+        Regex                                           |>  Peggy.GeneralRegexParser
+        ":[" String "]"                                :> { Peggy.NonemptyRegex(Regex("[$String]")) } 
+        ":."                                            :> { Peggy.NonemptyRegex(r".") }
+        "followedby(" e=expression ")"                  :> { LookAhead(e) }
+        "{" !"{" sequence_body "}"
+        "(" expression ")"
+    }
+    
+    sequence_body = mapped_sequence || sequence 
+    mapped_sequence = { 
+        s=sequence ":> {" Action "}}"                 {{ Peggy.Map(make_action(names(s), Action), s) }
+    }
+    sequence = {
+        sequence_item*_                             |> Peggy.NamedSequence
+    }
+    sequence_item = { 
+        name=rule_name "=" parser=expression 
+        expression                                  :> { (name=:_, parser=expression) }
+    }
+    
+    # Julia parsed items w/ approximate implementations
+
+    Number = { ds=["0-9"]+_                         :> { parse(Int, ds) } }
+
+    Identifier = {
+        c1=["[:alpha:]_"] cs=["[:alnum:]_!"]*_      :> { Symbol(*(c1, cs...)) }
+    }
+    Action = {
+        { cs=:["."]*_                                     :> { Meta.parse(*(cs)) } }
+    }
+    String = {
+        "\"" cs=qchar*_ "\""                        :> { Meta.parse(*(cs)) }
+    }
+    qchar = { 
+        "\\" c=:["\"\\"]                           :> { "\\$c" }
+        !:["\"\\"] c=:["."]
+    }
+    Regex = { [ "r\"" String "\"" ]                   :> { Regex(String)} }
+end;

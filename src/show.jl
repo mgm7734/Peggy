@@ -1,37 +1,112 @@
-function Base.show(io::IO, parser::Parser) 
-  Base.print(io, "parser(")
-    showparser(io, parser)
-    Base.print(io, ")")
+#function Base.show(io::IO, parser::Parser) 
+#  Base.print(io, "parser(")
+#    showparser(io, parser)
+#    Base.print(io, ")")
+#end
+
+Base.show(io::IO, ::MIME"text/plain", p::Parser) = pretty(io, p)
+pretty(io::IO, p, _) = pretty(io::IO, p)
+#pretty(io::IO, p) = Base.show(io::IO, MIME("text/plain"), p)
+pretty(io::IO, p::Literal) = show(io, MIME("text/plain"), p.value)
+function pretty(io::IO, p::LookAhead) 
+    print(io, "followedby(")
+    pretty(io,  p.expr)
+    print(io, ")")
+end
+pretty(io::IO, p::RegexParser) = print(io, p.re)
+pretty(io::IO, p::GramRef) = print(io, string(p.sym))
+function pretty(io::IO, p::Not)
+    print(io, "!")
+    pretty(io, p.expr)
+end
+
+function pretty(io::IO, p::OneOf) 
+    print(io, "{ ")
+    join(io, (sprint(pretty, p, true) for p in p.exprs), " ; ")
+    print(io, " }")
+end
+
+function pretty(io::IO, p::Many) 
+    pretty(io, p.expr)
+    if !ismissing(p.max)
+        print(io, "*($(p.min):$(p.max))")
+    elseif p.min == 0
+        print(io, "*_")
+    elseif p.min == 1
+        print(io, "+_")
+    else
+        print(io, "*$(p.min)")
+    end
+end
+
+function pretty(io::IO, p::NamedSequence) 
+    pretty(io, p, false)
+end
+
+function pretty(io::IO, p::NamedSequence, inrow)
+    if !inrow
+        print(io, "{")
+    end
+    join(io, (sprint(prettyseqitem, p) for p in p.items), " ")
+    if !inrow
+        print(io, "}")
+    end
+end
+function prettyseqitem(io::IO, item) 
+    rename = 
+        if item.parser isa GramRef 
+            item.name != item.parser.sym
+        else
+            item.name != :_
+        end
+    if rename
+        print(io, string(item.name))
+        print(io, "=")
+    end
+    show(io, MIME("text/plain"), item.parser)
+end
+
+function pretty(io::IO, p::Map)
+    #print(io, "Map(", io, p.callable, ",")
+    print(io, "Map(")
+    print(io, p.callable)
+    print(io, ",")
+    pretty(io, p.expr)
+    print(io, ")")
 end
 
 function Base.showerror(io::IO, ex::ParseException)
-    print(io, "ParseException at ")
+    print(io, "ParseException")
     st = ex.state
     printpos(io, st.input, st.maxfailindex)
     print(io, "expected: ")
     #oshowparserlist(io, "", unique(st.expected); delim=", ", last=", or ")
-    print(io, unique(st.expected))
+    #oprint(io, unique(st.expected))
+    join(io, (sprint(show, MIME("text/plain"), p) for p in st.expected), " or ")
+    
 end
 
 function printpos(io::IO, s::AbstractString, pos::Int)
-    println(io, "at index $pos in: $s")
-    return
-    # TODO: use Regex
-    bol = something(findlast('\n', SubString(s, 1, pos)), 0) + 1
-    eol = something(findnext(==('\n'), s, pos), length(s))
-    if pos != eol
-        eol -= 1
+    if isempty(s)
+        print(io, " in empty string")
+        return
     end
+    pos = min(pos, length(s))
+    thrupos = SubString(s, 1, pos)
+    m = match(r"[^\n]*.$"s, thrupos);
+    m === nothing && @info "printpos" thrupos pos s
+    before = m.match;
+    pointer = " "^(length(before)-1) * "^"
+    text = match(r".*", SubString(s, m.offset)).match
     lineno = count(==('\n'), SubString(s, 1, pos)) + 1
-    #@info "printpos" pos bol eol lineno length(s) s
-    print(io, "line ")
+    colno = length(pointer)
+    print(io, " at line ")
     print(io, lineno)
     print(io, " column ")
-    print(io, pos - bol + 1)
+    print(io, colno)
     println(io, ":")
-    println(io, SubString(s, bol, eol))
-    print(io, " "^(pos - bol))
-    println(io, "^")
+    println(io, text)
+    println(io, pointer)
 end
 
 function showparserlist(io, before, parsers, after=""; delim = ", ", last=delim)
@@ -84,6 +159,7 @@ end
 showparser(io::IO, parser::GramRef) = show(io, parser.sym)
 showparser(io::IO, parser::LeftRecursive) = showparser(io, parser.parser)
 
+#=
 function Base.show(io::IO, parser::Grammar) 
     print(io, "grammar(")
     showparser(io, parser.root)
@@ -96,3 +172,4 @@ function Base.show(io::IO, parser::Grammar)
     end
     Base.print(")")
 end
+=#

@@ -3,7 +3,7 @@ module Peggy
 export @grammar, @peg, anych, followedby, oneof, lit, many 
 export END, parser, pegparser, grammar, runpeg, not, ParseException
 
-const debug = false
+debug = false
 const PRETTY_ERROR = true
 
 include("parsers.jl")

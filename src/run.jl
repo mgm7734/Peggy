@@ -118,13 +118,28 @@ function calcnextstate!(st::State, p::Sequence)
     succeed!(st, tuple(values...))
 end
 
-function calcnextstate!(st::State, p::MappedSequence) 
+function calcnextstate!(st::State, p::NamedSequence) 
     values = [] 
-    for (parser, name) in p.namedparsers
-        if isfail(nextstate!(st, parser))
+    for item in p.items
+        nextstate!(st, item.parser)
+        if isfail(st)
             return st
         end
-        if (name !== nothing)
+        if (item.keepvalue)
+            push!(values, value(st))
+        end
+    end
+    v = length(values) == 0 ? () : length(values) == 1 ? first(values) : NamedTuple{keys(p)}(tuple(values...))
+    succeed!(st, v)
+end
+
+function calcnextstate!(st::State, p::MappedSequence) 
+    values = [] 
+    for item in p.namedparsers
+        if isfail(nextstate!(st, item.parser))
+            return st
+        end
+        if (item.keepvalue)
             push!(values, value(st))
         end
     end
@@ -150,15 +165,20 @@ function calcnextstate!(st::State, parser::Many)
     while ismissing(parser.max) || length(values) < parser.max
         nextstate!(st, parser.expr)
         if isfail(st)
-            if length(values) >= parser.min
-                return succeed!(st, [values...])
-            else
-                reset(st, start)
-                return fail!(st)
-            end
+            break
         end
         push!(values, value(st))
     end
+    if length(values) >= parser.min
+        return succeed!(st, [values...])
+    else
+        reset(st, start)
+        return fail!(st)
+    end
+end
+
+function calcnextstate!(st, parser::Fail)
+    fail!(st, parser)
 end
 
 function calcnextstate!(st::State, parser::Not)

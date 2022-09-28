@@ -28,6 +28,34 @@ end
 struct MappedSequence <: Parser
     callable
     namedparsers::Vector{Tuple{Parser,Union{Symbol,Nothing}}}
+    singlevalued
+    function MappedSeqence(callable, items)
+        new(callable, items,
+            length(parsers(items)) == 1 || 
+            1 == count(n->!startswith(string(n), "_"), map(last, items))
+        )
+    end
+end
+Base.names(p::MappedSequence) = map(last, p)
+parsers(p::MappedSequence) = map(first, p)
+
+SeqItem = Tuple{Symbol, Parser}
+isresult(i::SeqItem) = !startswith(string(first(i)), "_")
+
+struct NamedSequence <: Parser
+    items::Vector{@NamedTuple{name::Symbol, parser::Parser,keepvalue::Bool}}
+    #function NamedSequence(items::Vector{SeqItem}) 
+end
+function namedSequence(items) 
+    #NamedSequence(map((np, k)->combine(first(np), last(np), k), zip(items, keepvalues(items))))
+    NamedSequence([( name=first(np), parser=last(np), keepvalue=k  )
+                    for (np, k) in zip(items, keepvalues(first(i) for i in items))])
+end
+Base.keys(p::NamedSequence) = tuple((i.name for i in p.items if i.keepvalue)...)
+parsers(p::NamedSequence) = map(last, p)
+function keepvalues(names) 
+    [ length(names) == 1 || !startswith(string(n), "_")
+      for n in names]
 end
 
 struct OneOf <: Parser
@@ -38,11 +66,15 @@ struct Many <: Parser
     expr::Parser
     min
     max
-end
+    end
 Many(e) = Many(e, 0, missing)
 
 struct Not <: Parser
     expr::Parser
+end
+
+struct Fail <: Parser
+    message
 end
 
 struct LookAhead <: Parser
@@ -81,6 +113,7 @@ function left_resursive_names(productions)
     maybeempty(p::GeneralRegexParser) = true
     maybeempty(p::NonemptyRegex) = false
     maybeempty(p::Sequence) = all(maybeempty, p.exprs)
+    maybeempty(p::NamedSequence) = all(maybeempty, getfield.(p.items, :parser))
     maybeempty(p::MappedSequence) = all(maybeempty, map(first, p.namedparsers))
     maybeempty(p::OneOf) = any(maybeempty, p.exprs)
     maybeempty(p::Many) = true
@@ -107,6 +140,12 @@ function left_resursive_names(productions)
             maybeempty(p2) || return
         end
     end
+    function addlrefs(parser::NamedSequence, name::Symbol, allowed=false)
+        for item in parser.items
+            addlrefs(item.parser, name, allowed)
+            maybeempty(item.parser) || return
+        end
+    end
     function addlrefs(p::MappedSequence, name::Symbol, allowed = false)
         for (p2,_) in p.namedparsers
             addlrefs(p2, name, allowed)
@@ -131,7 +170,7 @@ function left_resursive_names(productions)
     function addlrefs(p::GramRef, name::Symbol, allowed = false) 
         result = leftrefs[name]
         push!(result, p.sym, leftrefs[p.sym]...)
-        #!allowed && name in result && @warn("'$name' has invalid left recursion")
+    #!allowed && name in result && @warn("'$name' has invalid left recursion")
     end
 
     for n in keys(productions)
