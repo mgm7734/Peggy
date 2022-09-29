@@ -87,7 +87,7 @@ peg_grammar = grammar(
         :NEWLINE => oneof("\r\n", "\r", "\n"),
     )
 =#
-@peg begin
+peggy = @peg begin
     parser =  grammar || expression
     
     grammar = { # just Julia syntax for a block of `rule` productions
@@ -95,16 +95,16 @@ peg_grammar = grammar(
         "(" r1=rule _sep2 rs={ _sep2 rule } ")"             :> { Peggy.Grammar(r1.first, Dict(rule, rs...)) }
     } 
     _begin = { "begin" [ _sep1 ] }
-    _sep1 = (";" | "\n")+_
+    _sep1 = (";" || "\n")+_
     _sep2 = { 
         ";" (";" || "\n")*_ 
     }
     rule = { rule_name "=" expession                        :> { rule_name => expression } }
-    rule_name = Identifier        |> Symbol
+    rule_name = { Identifier        :> Symbol }
     
     expression = {
         # `expr |> f1=expr |> fn` is valid if f1 returns a `Parser`.
-        expresion "|>" fn=julia_expression                   :> { Peggy.Map(fn, alt_expr) }
+        expression ":>" fn=julia_expression                   :> { Peggy.Map(fn, expression) }
         alt_expr
     }
     alt_expr =  {
@@ -115,7 +115,7 @@ peg_grammar = grammar(
         primary_expr "*" c=cardnality                       :> { Many(neg_expr, c.min, c.max) }
         primary_expr "+" "_"                                :> { Many(neg_expr, 1, nothing) }
         "[" primary_expr "]"                                :> { Many(neg_expr, 0, 1) }
-        "!" primary_expr                                |> Peggy.Not
+        "!" primary_expr                                :> Peggy.Not
     }
     cardnality = {
         "_"                                             :> { (min=0, max=nothing) } 
@@ -123,9 +123,9 @@ peg_grammar = grammar(
         Number                                          :> { min=Number, max=nothing }
     }
     primary_expr = {
-        String                                          |> Peggy.Literal
-        Regex                                           |>  Peggy.GeneralRegexParser
-        ":[" String "]"                                :> { Peggy.NonemptyRegex(Regex("[$String]")) } 
+        String                                          :> Peggy.Literal
+        Regex                                           :>  Peggy.GeneralRegexParser
+        ":[" s=String "]"                                :> { Peggy.NonemptyRegex(Regex("[$s]")) } 
         ":."                                            :> { Peggy.NonemptyRegex(r".") }
         "followedby(" e=expression ")"                  :> { LookAhead(e) }
         "{" !"{" sequence_body "}"
@@ -134,10 +134,10 @@ peg_grammar = grammar(
     
     sequence_body = mapped_sequence || sequence 
     mapped_sequence = { 
-        s=sequence ":> {" Action "}}"                 {{ Peggy.Map(make_action(names(s), Action), s) }
+        s=sequence ":> {" Action "}"                 :> { Peggy.Map(make_action(names(s), Action), s) }
     }
     sequence = {
-        sequence_item*_                             |> Peggy.NamedSequence
+        sequence_item*_                             :> Peggy.NamedSequence
     }
     sequence_item = { 
         name=rule_name "=" parser=expression 
@@ -149,7 +149,7 @@ peg_grammar = grammar(
     Number = { ds=["0-9"]+_                         :> { parse(Int, ds) } }
 
     Identifier = {
-        c1=["[:alpha:]_"] cs=["[:alnum:]_!"]*_      :> { Symbol(*(c1, cs...)) }
+        c1=:["[:alpha:]_"] cs=:["[:alnum:]_!"]*_      :> { Symbol(*(c1, cs...)) }
     }
     Action = {
         { cs=:["."]*_                                     :> { Meta.parse(*(cs)) } }
@@ -158,8 +158,8 @@ peg_grammar = grammar(
         "\"" cs=qchar*_ "\""                        :> { Meta.parse(*(cs)) }
     }
     qchar = { 
-        "\\" c=:["\"\\"]                           :> { "\\$c" }
-        !:["\"\\"] c=:["."]
+        "\\" c={"\"" ; "\\"}                         # :> { "\\$c" }
+        !({"\"" ; "\\"}) c=r"."
     }
-    Regex = { [ "r\"" String "\"" ]                   :> { Regex(String)} }
+    Regex = { "r\"" s=String "\""                    :> { Regex(s)} }
 end;

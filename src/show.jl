@@ -4,7 +4,12 @@
 #    Base.print(io, ")")
 #end
 
-Base.show(io::IO, ::MIME"text/plain", p::Parser) = pretty(io, p)
+function Base.show(io::IO, ::MIME"text/plain", p::Parser) 
+    print(io, "@peg(")
+    pretty(io, p)
+    print(io, ")")
+end
+
 pretty(io::IO, p, _) = pretty(io::IO, p)
 #pretty(io::IO, p) = Base.show(io::IO, MIME("text/plain"), p)
 pretty(io::IO, p::Literal) = show(io, MIME("text/plain"), p.value)
@@ -43,11 +48,15 @@ function pretty(io::IO, p::NamedSequence)
     pretty(io, p, false)
 end
 
-function pretty(io::IO, p::NamedSequence, inrow)
+function pretty(io::IO, p::NamedSequence, inrow; map::Any=nothing)
     if !inrow
         print(io, "{")
     end
     join(io, (sprint(prettyseqitem, p) for p in p.items), " ")
+    if map !== nothing
+        print(io, " :> ")
+        show(io, MIME("text/plain"), map)
+    end
     if !inrow
         print(io, "}")
     end
@@ -63,16 +72,32 @@ function prettyseqitem(io::IO, item)
         print(io, string(item.name))
         print(io, "=")
     end
-    show(io, MIME("text/plain"), item.parser)
+    pretty(io, item.parser)
 end
 
 function pretty(io::IO, p::Map)
-    #print(io, "Map(", io, p.callable, ",")
+    if p.expr isa NamedSequence
+        pretty(io, p.expr, false; map=p.callable)
+        return
+    end
     print(io, "Map(")
     print(io, p.callable)
-    print(io, ",")
-    pretty(io, p.expr)
+    print(io, ", ")
+    #pretty(io, p.expr)
+    show(io, MIME("text/plain"), p.expr)
     print(io, ")")
+end
+
+pretty(io::IO, parser::LeftRecursive) = pretty(io, parser.parser)
+
+function pretty(io::IO, parser::Grammar)
+    print(io, "begin ")
+    join(io, (sprint(prettyrule, sym, p) for (sym,p) in parser.dict), "; ")
+    print(io, " end")
+end
+function prettyrule(io, sym, p)
+    print(io, sym, "=")
+    pretty(io, p)
 end
 
 function Base.showerror(io::IO, ex::ParseException)
@@ -80,31 +105,31 @@ function Base.showerror(io::IO, ex::ParseException)
     st = ex.state
     printpos(io, st.input, st.maxfailindex)
     print(io, "expected: ")
-    #oshowparserlist(io, "", unique(st.expected); delim=", ", last=", or ")
-    #oprint(io, unique(st.expected))
-    join(io, (sprint(show, MIME("text/plain"), p) for p in st.expected), " or ")
+    join(io, (sprint(pretty, p) for p in st.expected), " or ")
     
 end
 
-function printpos(io::IO, s::AbstractString, pos::Int)
+function printpos(io::IO, s::AbstractString, pos::Int; file="(no file)")
     if isempty(s)
-        print(io, " in empty string")
+        println(io, " in empty string")
         return
     end
-    pos = min(pos, length(s))
-    thrupos = SubString(s, 1, pos)
-    m = match(r"[^\n]*.$"s, thrupos);
-    m === nothing && @info "printpos" thrupos pos s
+    if pos >= length(s)
+        s = s * " "
+    end
+    m = match(r"[^\n]*.$"s, SubString(s, 1, pos)) 
+
     before = m.match;
     pointer = " "^(length(before)-1) * "^"
     text = match(r".*", SubString(s, m.offset)).match
     lineno = count(==('\n'), SubString(s, 1, pos)) + 1
     colno = length(pointer)
-    print(io, " at line ")
+    print(io, " @ ")
+    print(io, file)
+    print(io, ":")
     print(io, lineno)
-    print(io, " column ")
-    print(io, colno)
-    println(io, ":")
+    print(io, ":")
+    println(io, colno)
     println(io, text)
     println(io, pointer)
 end

@@ -75,7 +75,14 @@ julia> g("1234")
 ```
 
 """
-anych(charclass::String) = NonemptyRegex(Regex("[$charclass]"))
+function anych(charclass::String) 
+    try 
+        NonemptyRegex(Regex("[$charclass]"))
+    catch ex
+        error("Invalid characer class \"$charclass\" ($( ex.msg ))")
+        print(e)
+    end
+end
 
 """
 A parser that matches any single character.
@@ -107,6 +114,12 @@ not(p) = Not(pegparser(p))
 parser(x...) = pegparser(x...)
 
 """
+A PEG parser that matches any character and yields it as a string.
+"""
+ANY = NonemptyRegex(r".")
+
+"""
 A PEG parser that matches the end of the input; yields result `()`.
 """
-END = parser(not(r"."))
+END = not(ANY)
+

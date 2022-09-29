@@ -1,42 +1,64 @@
 ```@meta
 CurrentModule = Peggy
+using Peggy
 ```
 # Peggy
 
-*Packrat parser combinators for Julia supporting left-recursive grammars.*
+*Generate Packrat PEG parsers for Julia* 
 
 Features:
 
-- pretty good syntax error messages. [TODO: how costly is this? Make it optional?]
+- pretty good syntax error messages. 
 - detects and correctly handles left-recursion
-- separation of syntax from functinality.  I'm still playing around with the input syntax.
+- both combinator functions and a macro are provided
 
-## Quickstart
 ## Creating Parsers
 
-Use [`@grammar`](@ref) to construct parsers.  It uses a slightly arcane syntax to avoid 
-excessive punctuation while working with Julia's syntax. Julia's lack of suffix operators 
-presented a particular challenge. Great advantage (abuse?) was taken of matrix notation.
+Use [`@peg`](@ref) to create a parser:  
+
 
 ```jldoctest
 julia> using Peggy
 
-julia> p = @grammar begin
-          start = "match a"
-       end;
+julia> p = @peg("match a");
 
-julia> runpeg(p, "match abc") # does not need to match the entire string
+julia> p("match abc") # does not need to match the entire string
 "match a"
 
-julia> p = @grammar begin
-          start = [ a_or_bs " "... hexdigit !anych() ]
-          a_or_bs = ("a" / "b")...
-          hexdigit = anych("[:digit:]a-fA-F")
+julia> p = @peg begin
+          start = { a_or_bs hexdigit !anych() }
+          a_or_bs = ("a" || "b")*_
+          hexdigit = :["[:digit:]a-fA-F"]
        end;
 
 julia> p("abaab 9")
 (a_or_bs = ["a", "b", "a", "a", "b"], hexdigit = "9")
 ```
+
+## Peggy expresions
+
+### String literals
+
+```jldoctest
+p = @peg "a string"
+
+# output
+
+p("a string")
+"a string"
+```
+```jldoctest
+julia> @peg("another string")("a string")
+ERROR: ParseException @ (no file):1:1
+a string
+^
+expected: "another string"
+[...]
+````
+### Repetition and Optionality
+
+
+### PCRE Character Classes
 
 ## Regular Expressions
 
@@ -46,19 +68,19 @@ julia> p("abaab 9")
     assumes the expression can match an empty string.  That assumption may cause a rule to be deemed
     left-recursive, which has some overhead.  
 
-    If you know your expression does not match "", you can use `Peggy.NonemptyRegx(r"[[:space]]")`.  
-    That's what `:["[:space]"]` evalutes to.
+    If you know your expression does not match "", you can use `Peggy.NonemptyRegx`.  
+    For example, Peggy's PCRE class express `:["[:space]"]` expands to `Peggy.NonemptyRegex("[[:scpace]]").
 
+## Squirrely Curly
 
-
-Regular expressions can sometimes be convenient.  
-
-However, they can kill performance.  Peggy doesn't analyze them and assumes that they may match an empty string.
-This may cause rules to be erroneoulsy deemed left-recursive.
-
-If you know your regex can never match an empty string, you can inform Peggy by using `TBD`.  This is what
-already happens under the hood with `:[_PCRE-class_]` notation.
-
+Julia's parsing of curly-braces is mostly the same as for square-brackets.  But it has a strange interaction with unary
+operators.  
+```
+julia> Meta.show_sexpr(:( !{ a } ))
+(:curly, :!, :a)
+julia> Meta.show_sexpr(:( ![ a ] ))
+(:call, :!, (:vect, :a))
+```
 ## Index
 ```@index
 ```

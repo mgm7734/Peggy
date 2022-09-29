@@ -46,7 +46,7 @@ struct NamedSequence <: Parser
     items::Vector{@NamedTuple{name::Symbol, parser::Parser,keepvalue::Bool}}
     #function NamedSequence(items::Vector{SeqItem}) 
 end
-function namedSequence(items) 
+function sequence(items) 
     #NamedSequence(map((np, k)->combine(first(np), last(np), k), zip(items, keepvalues(items))))
     NamedSequence([( name=first(np), parser=last(np), keepvalue=k  )
                     for (np, k) in zip(items, keepvalues(first(i) for i in items))])

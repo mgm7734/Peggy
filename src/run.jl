@@ -156,7 +156,8 @@ function calcnextstate!(st::State, parser::OneOf)
         end
         st.index = ix
     end
-    fail!(st, parser)
+    st
+    #fail!(st, parser)
 end
 
 function calcnextstate!(st::State, parser::Many)
