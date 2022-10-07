@@ -71,11 +71,7 @@ function runpeg(parser::Parser, input::AbstractString)
     value(st)
 end
 runpeg(p, i) = runpeg(parser(p), i)
-"""
-    (parser::Parser)(input)
 
-Parsers are callable.
-"""
 (parser::Parser)(input) = runpeg(parser, input)
 
 nextstate!(st::State, parser) = calcnextstate!(st, parser)
@@ -83,11 +79,11 @@ nextstate!(st::State, parser) = calcnextstate!(st, parser)
 function calcnextstate!(st::State, p::Literal)
     t = remainingtext(st)
     if startswith(t, p.value)
-        consume = length(p.value)
+        consume = lastindex(p.value)
         m = match(p.skiptrailing, SubString(t, 1+consume))
         # @info "literal" t consume p.skiptrailing m SubString(t, consume)
         if m !== nothing
-            consume += length(m.match)
+            consume += m.match.ncodeunits
         end
         succeed!(st, p.value, consume)
     else
@@ -101,22 +97,22 @@ function calcnextstate!(st::State, parser::RegexParser)
         fail!(st, parser)
     else
         m = match(parser.re, s)
-        succeed!(st, m.match, length(m.match))
+        succeed!(st, m.match,m.match.ncodeunits)
     end
 end
 
-function calcnextstate!(st::State, p::Sequence) 
-    values = [] 
-    for p′ in p.exprs
-         nextstate!(st, p′)
-        if isfail(st)
-            return st
-        end
-        push!(values, value(st))
-    end
-    # debug && @info "chain" values 
-    succeed!(st, tuple(values...))
-end
+#function calcnextstate!(st::State, p::Sequence) 
+#    values = [] 
+#    for p′ in p.exprs
+#         nextstate!(st, p′)
+#        if isfail(st)
+#            return st
+#        end
+#        push!(values, value(st))
+#    end
+#    # debug && @info "chain" values 
+#    succeed!(st, tuple(values...))
+#end
 
 function calcnextstate!(st::State, p::NamedSequence) 
     values = [] 
@@ -129,23 +125,23 @@ function calcnextstate!(st::State, p::NamedSequence)
             push!(values, value(st))
         end
     end
-    v = length(values) == 0 ? () : length(values) == 1 ? first(values) : NamedTuple{keys(p)}(tuple(values...))
+    v = length(values) == 0 ? () : length(values) == 1 ? first(values) : tuple(values...)
     succeed!(st, v)
 end
 
-function calcnextstate!(st::State, p::MappedSequence) 
-    values = [] 
-    for item in p.namedparsers
-        if isfail(nextstate!(st, item.parser))
-            return st
-        end
-        if (item.keepvalue)
-            push!(values, value(st))
-        end
-    end
-    v = p.callable(values...)
-    succeed!(st, v)
-end
+#function calcnextstate!(st::State, p::MappedSequence) 
+#    values = [] 
+#    for item in p.namedparsers
+#        if isfail(nextstate!(st, item.parser))
+#            return st
+#        end
+#        if (item.keepvalue)
+#            push!(values, value(st))
+#        end
+#    end
+#    v = p.callable(values...)
+#    succeed!(st, v)
+#end
 
 function calcnextstate!(st::State, parser::OneOf)
     ix = st.index
@@ -205,6 +201,7 @@ function calcnextstate!(st::State, parser::Map)
     if isfail(st)    
         st
     else
+        debug && @info "map" st.value value(st)
         val = parser.callable(value(st))
         debug && @info "map" st.value val
         succeed!(st, val)

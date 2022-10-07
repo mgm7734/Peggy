@@ -1,7 +1,7 @@
 using Peggy
 using Documenter
 
-DocMeta.setdocmeta!(Peggy, :DocTestSetup, :(using Peggy); recursive=true)
+#DocMeta.setdocmeta!(Peggy, :DocTestSetup, :(using Peggy); recursive=true)
 
 makedocs(;
     modules=[Peggy],
@@ -16,6 +16,7 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Expressions" => "expressions.md"
     ],
 )
 

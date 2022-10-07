@@ -40,7 +40,7 @@ Any PEG parser is also a valid PEG expression There are a few other combinators 
 pegparser(s::AbstractString) = Literal(s)
 pegparser(re::Regex) = GeneralRegexParser(re)
 pegparser(s::Symbol) = GramRef(s)
-pegparser(v::AbstractVector) = Sequence(map(pegparser, v))
+# pegparser(v::AbstractVector) = Sequence(map(pegparser, v))
 function pegparser(pair::Pair) 
     (p, v) = pair
     fn = if (!isa(v, Function) && isempty(methods(v)))
@@ -53,73 +53,8 @@ end
 pegparser(p::Parser) = p
 pegparser(p1, p2, ps...) = pegparser([p1, p2, ps...])
 
-"""
-    anych(charclass::String)
-
-Create a parser for a single character matchng regex character classes. 
-
-Functionally identical to Regex("[\$charclass]") except it is known to never match an
-empty string.  This is important to avoid unneccesary and expensive left-recursion
-overhead.
-
-# Examples
-
-```jldoctet
-julia> g = @grammar begin
-       number = [ digit ds:(digit...)  { parse(Int, *(digit, ds...)) } ]
-       digit = anych("[:digit:]")
-       end;
-
-julia> g("1234")
-1234
-```
-
-"""
-function anych(charclass::String) 
-    try 
-        NonemptyRegex(Regex("[$charclass]"))
-    catch ex
-        error("Invalid characer class \"$charclass\" ($( ex.msg ))")
-        print(e)
-    end
-end
-
-"""
-A parser that matches any single character.
-"""
-anych() = NonemptyRegex(r".")
-
-"""
-    oneof(pegexpr...)
-
-Create a parser for ordered alternatives.
-"""
-oneof(pegexpr...) = OneOf(map(pegparser, pegexpr))
-
-"""
-    many(pegexpr...)
-
-Create a parser that matches zero or more repititions of `parser(pegexpr)`; return a vector of results.
-"""
-many(pegexpr...) = Many(pegparser(pegexpr...),0,missing)
-
-"""
-    not(p)
-
-Create a parser that fails if parser `p` succeeds. Otherwise it succeeds with value `()`
-"""
-not(p) = Not(pegparser(p))
-
 #Base.@deprecate parser pegparser
 parser(x...) = pegparser(x...)
 
-"""
-A PEG parser that matches any character and yields it as a string.
-"""
-ANY = NonemptyRegex(r".")
 
-"""
-A PEG parser that matches the end of the input; yields result `()`.
-"""
-END = not(ANY)
 

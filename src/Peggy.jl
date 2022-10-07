@@ -1,7 +1,7 @@
 module Peggy
 
-export @grammar, @peg, anych, followedby, oneof, lit, many 
-export END, parser, pegparser, grammar, runpeg, not, ParseException
+export @peg, ANY, CHAR, END, fail, followedby, oneof, many 
+export peggy, runpeg, not, ParseException
 
 debug = false
 const PRETTY_ERROR = true

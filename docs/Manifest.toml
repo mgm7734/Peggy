@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.0"
+julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "51a0df1d8bf1d7d5ba6c191acb68d8b2663fc1dd"
+project_hash = "95d7023b9021d4dd434dcc09bcf6e85fe9911df8"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -51,6 +51,12 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.10"
+
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
@@ -62,16 +68,17 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
-[[deps.Peggy]]
-path = ".."
-uuid = "73a55e99-9441-455f-8acb-d9f8f3d4403a"
-version = "0.1.0"
-
 [[deps.Parsers]]
 deps = ["Dates"]
 git-tree-sha1 = "3d5bf43e3e8b412656404ed9466f1dcbf7c50269"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.4.0"
+
+[[deps.Peggy]]
+deps = ["MacroTools"]
+path = ".."
+uuid = "73a55e99-9441-455f-8acb-d9f8f3d4403a"
+version = "0.1.0"
 
 [[deps.Printf]]
 deps = ["Unicode"]

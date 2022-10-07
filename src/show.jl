@@ -18,20 +18,30 @@ function pretty(io::IO, p::LookAhead)
     pretty(io,  p.expr)
     print(io, ")")
 end
-pretty(io::IO, p::RegexParser) = print(io, p.re)
+pretty(io::IO, p::RegexParser) = showparser(io, p)
 pretty(io::IO, p::GramRef) = print(io, string(p.sym))
 function pretty(io::IO, p::Not)
-    print(io, "!")
-    pretty(io, p.expr)
+    if p.expr == ANY()
+        print(io, "END()")
+    else
+        print(io, "!")
+        pretty(io, p.expr)
+    end
 end
 
-function pretty(io::IO, p::OneOf) 
-    print(io, "{ ")
+function pretty(io::IO, p::OneOf, inrow = false) 
+    inrow || print(io, "{ ")
     join(io, (sprint(pretty, p, true) for p in p.exprs), " ; ")
-    print(io, " }")
+    inrow || print(io, " }")
 end
 
 function pretty(io::IO, p::Many) 
+    if p.min == 0 && !ismissing(p.max) && p.max == 1
+        print(io, "[")
+        pretty(io, p.expr, true)
+        print(io, "]")
+        return
+    end
     pretty(io, p.expr)
     if !ismissing(p.max)
         print(io, "*($(p.min):$(p.max))")
@@ -151,26 +161,26 @@ showparser(io::IO, parser::Literal) = show(io, parser.value)
 showparser(io::IO, parser::RegexParser) = show(io, parser.re)
 function showparser(io::IO, parser::NonemptyRegex)
     if (parser.re.pattern == ".")
-        print(io, "anych()")
+        print(io, "ANY()")
     else
-        print(io, "anych(\"")
+        print(io, "CHAR(\"")
         print(io, parser.re.pattern[2:end-1])
         print(io, "\")")
     end
 end
-showparser(io::IO, parser::Sequence) = showparserlist(io, "[", parser.exprs, "]")
-function showparser(io::IO, parser::MappedSequence)
-    # TODO
-    showparserlist(io, "[", map(first, parser.namedparsers), "]")
-end
+#showparser(io::IO, parser::Sequence) = showparserlist(io, "[", parser.exprs, "]")
+#function showparser(io::IO, parser::MappedSequence)
+#    # TODO
+#    showparserlist(io, "[", map(first, parser.namedparsers), "]")
+#end
 showparser(io::IO, parser::OneOf) = showparserlist(io, "oneof(", parser.exprs, ")")
 function showparser(io::IO, parser::Many)
     Base.print(io, "many(")
-    if parser isa Sequence
-        showparserlist(io, "", parser.expr.exprs , "")
-    else
-        showparser(io, parser.expr)
-    end
+    #if false #parser isa Sequence
+    #    showparserlist(io, "", parser.expr.exprs , "")
+    #else
+    showparser(io, parser.expr)
+    #end
     Base.print(io, ")")
 end
 

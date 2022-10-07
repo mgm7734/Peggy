@@ -3,5 +3,8 @@ uuid = "73a55e99-9441-455f-8acb-d9f8f3d4403a"
 authors = ["Mark Mendel <mmendel@meinergy.com> and contributors"]
 version = "0.1.0"
 
+[deps]
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+
 [compat]
 julia = "1.8"
