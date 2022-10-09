@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Expressions · Peggy.jl</title><script data-outdated-warner src="../assets/warner.js"></script><link rel="canonical" href="https://mgm7734.github.io/Peggy.jl/expressions/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">Peggy.jl</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li class="is-active"><a class="tocitem" href>Expressions</a><ul class="internal"><li><a class="tocitem" href="#End-of-string"><span>End of string</span></a></li><li><a class="tocitem" href="#String-literal"><span>String literal</span></a></li><li><a class="tocitem" href="#Repetition-and-Optionality"><span>Repetition and Optionality</span></a></li><li><a class="tocitem" href="#Sequence"><span>Sequence</span></a></li><li><a class="tocitem" href="#Character-class"><span>Character class</span></a></li><li><a class="tocitem" href="#Regular-Expressions"><span>Regular Expressions</span></a></li><li><a class="tocitem" href="#Peggy-functions"><span>Peggy functions</span></a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Expressions</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Expressions</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/mgm7734/Peggy.jl/blob/main/docs/src/expressions.md#" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Peggy-expresions"><a class="docs-heading-anchor" href="#Peggy-expresions">Peggy expresions</a><a id="Peggy-expresions-1"></a><a class="docs-heading-anchor-permalink" href="#Peggy-expresions" title="Permalink"></a></h1><p>Use <a href="../#Peggy.@peg-Tuple{Any}"><code>@peg</code></a> to create a parser.  You can also use the underly constructor functions which is occasionally useful.</p><p>All examples assume you have installed Peggy.jl and loaded the package with</p><pre><code class="language-julia-repl hljs">julia&gt; using Peggy</code></pre><h2 id="End-of-string"><a class="docs-heading-anchor" href="#End-of-string">End of string</a><a id="End-of-string-1"></a><a class="docs-heading-anchor-permalink" href="#End-of-string" title="Permalink"></a></h2><p>Matches the end of the input string. Consumes nothing, returns <code>()</code>.</p><pre><code class="language-julia-repl hljs">julia&gt; ( END() )(&quot;&quot;)
+()
+
+julia&gt; ( END() )(&quot;something&quot;)
+ERROR: ParseException @ (no file):1:1
+something
+^
+expected: END()
+[...]</code></pre><h2 id="String-literal"><a class="docs-heading-anchor" href="#String-literal">String literal</a><a id="String-literal-1"></a><a class="docs-heading-anchor-permalink" href="#String-literal" title="Permalink"></a></h2><p>Matches a literal string and returns the string.</p><pre><code class="language-julia-repl hljs">julia&gt;  (@peg { &quot;hello&quot; &quot;Peggy&quot; })( &quot;hello Peggy!&quot; )
+(&quot;hello&quot;, &quot;Peggy&quot;)</code></pre><p>By default, trailing whitespace is ignored. You can alter this behavior with the lower-level <code>peggy</code> function: You can change the default trailing whitespace:</p><pre><code class="language-julia-repl hljs">julia&gt; (@peg { peggy(&quot;a&quot;; skiptrailing=r&quot;&quot;) &quot;b&quot;  })( &quot;a b&quot; )
+ERROR: ParseException @ (no file):1:2
+a b
+ ^
+expected: &quot;b&quot;
+[...]</code></pre><h2 id="Repetition-and-Optionality"><a class="docs-heading-anchor" href="#Repetition-and-Optionality">Repetition and Optionality</a><a id="Repetition-and-Optionality-1"></a><a class="docs-heading-anchor-permalink" href="#Repetition-and-Optionality" title="Permalink"></a></h2><h3 id="N-or-more-repitions"><a class="docs-heading-anchor" href="#N-or-more-repitions">N or more repitions</a><a id="N-or-more-repitions-1"></a><a class="docs-heading-anchor-permalink" href="#N-or-more-repitions" title="Permalink"></a></h3><pre><code class="language-julia-repl hljs">julia&gt; ( @peg &quot;a&quot;*2 )( &quot;aa&quot; )
+2-element Vector{String}:
+ &quot;a&quot;
+ &quot;a&quot;
+
+julia&gt; ( @peg &quot;a&quot;*2 )( &quot;a&quot; )
+ERROR: ParseException @ (no file):1:2
+a
+ ^
+expected: &quot;a&quot;
+[...]</code></pre><pre><code class="language-julia-repl hljs">julia&gt; (@peg { &quot;a&quot;*(1:2) })( &quot;aaaab&quot; ) 
+2-element Vector{String}:
+ &quot;a&quot;
+ &quot;a&quot;
+
+julia&gt; (@peg { &quot;a&quot;*(1:2) })( &quot;ab&quot; ) 
+1-element Vector{String}:
+ &quot;a&quot;
+
+julia&gt; (@peg { &quot;a&quot;*(2:3) })( &quot;ab&quot; ) 
+ERROR: ParseException @ (no file):1:2
+ab
+ ^
+expected: &quot;a&quot;
+[...]</code></pre><p>Sugar:</p><h2 id="Sequence"><a class="docs-heading-anchor" href="#Sequence">Sequence</a><a id="Sequence-1"></a><a class="docs-heading-anchor-permalink" href="#Sequence" title="Permalink"></a></h2><pre><code class="language-julia-repl hljs">julia&gt; (@peg { &quot;a&quot;*_ &quot;b&quot; END() })( &quot;aaab&quot; ) 
+([&quot;a&quot;, &quot;a&quot;, &quot;a&quot;], &quot;b&quot;, ())</code></pre><pre><code class="language-julia-repl hljs">julia&gt; (@peg { result=&quot;a&quot;*_ &quot;b&quot; END() })( &quot;aaab&quot; ) 
+3-element Vector{String}:
+ &quot;a&quot;
+ &quot;a&quot;
+ &quot;a&quot;</code></pre><pre><code class="language-julia-repl hljs">julia&gt; (@peg { as=&quot;a&quot;*_ &quot;b&quot; END()  :&gt; { length(as) }})( &quot;aaab&quot; ) 
+3</code></pre><pre><code class="language-julia-repl hljs">julia&gt; (@peg { as=&quot;a&quot;*_ &quot;b&quot; END()  :&gt; length })( &quot;aaab&quot; ) 
+3</code></pre><div class="admonition is-warning"><header class="admonition-header">Squirrely Curly</header><div class="admonition-body"><p>Julia&#39;s parsing of curly-braces is mostly the same as for square-brackets.  But it has a strange interaction with unary operators.</p></div></div><pre><code class="language-julia-repl hljs">julia&gt; Meta.show_sexpr(:( !{ a } ))
+(:curly, :!, :a)
+julia&gt; Meta.show_sexpr(:( ![ a ] ))
+(:call, :!, (:vect, :a))</code></pre><p>Use parentheses to avoid problems:</p><pre><code class="language-julia-repl hljs">julia&gt; Meta.show_sexpr(:( !({ a }) ))
+(:call, :!, (:braces, :a))</code></pre><h2 id="Character-class"><a class="docs-heading-anchor" href="#Character-class">Character class</a><a id="Character-class-1"></a><a class="docs-heading-anchor-permalink" href="#Character-class" title="Permalink"></a></h2><pre><code class="language-julia-repl hljs">julia&gt; ( @peg CHAR(&quot;[:alpha:]_&quot;)*0  )( &quot;böse_7734!&quot; )
+5-element Vector{SubString{String}}:
+ &quot;b&quot;
+ &quot;ö&quot;
+ &quot;s&quot;
+ &quot;e&quot;
+ &quot;_&quot;</code></pre><h2 id="Regular-Expressions"><a class="docs-heading-anchor" href="#Regular-Expressions">Regular Expressions</a><a id="Regular-Expressions-1"></a><a class="docs-heading-anchor-permalink" href="#Regular-Expressions" title="Permalink"></a></h2><div class="admonition is-info"><header class="admonition-header">Regular expressions can kill performance.</header><div class="admonition-body"><p>By default, <code>r&quot;[[:space:]*&quot;</code> is translated to <code>Peggy.GeneralRegexParser(&quot;[[:space:]]*&quot;)</code> because Peggy assumes the expression can match an empty string.  That assumption may cause a rule to be deemed left-recursive, which has some overhead.  </p><p>If you know your expression does not match &quot;&quot;, you can use <code>Peggy.NonemptyRegx</code>.   For example, Peggy&#39;s PCRE class express <code>:[&quot;[:space]&quot;]</code> expands to `Peggy.NonemptyRegex(&quot;[[:scpace]]&quot;).</p></div></div><h2 id="Peggy-functions"><a class="docs-heading-anchor" href="#Peggy-functions">Peggy functions</a><a id="Peggy-functions-1"></a><a class="docs-heading-anchor-permalink" href="#Peggy-functions" title="Permalink"></a></h2></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Sunday 9 October 2022 20:33">Sunday 9 October 2022</span>. Using Julia version 1.8.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
