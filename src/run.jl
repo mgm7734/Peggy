@@ -76,28 +76,29 @@ runpeg(p, i) = runpeg(parser(p), i)
 
 nextstate!(st::State, parser) = calcnextstate!(st, parser)
 
-function calcnextstate!(st::State, p::Literal)
-    t = remainingtext(st)
-    if startswith(t, p.value)
-        consume = lastindex(p.value)
-        m = match(p.skiptrailing, SubString(t, 1+consume))
-        # @info "literal" t consume p.skiptrailing m SubString(t, consume)
-        if m !== nothing
-            consume += m.match.ncodeunits
-        end
-        succeed!(st, p.value, consume)
-    else
-        fail!(st, p)
-    end
-end
+# function calcnextstate!(st::State, p::Literal)
+#     t = remainingtext(st)
+#     if startswith(t, p.value)
+#         consume = lastindex(p.value)
+#         m = match(p.skiptrailing, SubString(t, 1+consume))
+#         # @info "literal" t consume p.skiptrailing m SubString(t, consume)
+#         if m !== nothing
+#             consume += m.match.ncodeunits
+#         end
+#         succeed!(st, p.value, consume)
+#     else
+#         fail!(st, p)
+#     end
+# end
 
 function calcnextstate!(st::State, parser::RegexParser)
     s = remainingtext(st)
-    if !startswith(s, parser.re)
+    m = valueAndConsume(parser, s)
+    #@info "csn regex" s parser m
+    if m === nothing
         fail!(st, parser)
     else
-        m = match(parser.re, s)
-        succeed!(st, m.match,m.match.ncodeunits)
+        succeed!(st, m.value, m.consume)
     end
 end
 
@@ -189,12 +190,12 @@ function calcnextstate!(st::State, parser::Not)
     end
 end
 
-function  calcnextstate!(st::State, parser::LookAhead)
-    startpos = mark(st)
-    calcnextstate!(st::State, parser.expr)
-    reset(st, startpos)
-    st
-end
+# function  calcnextstate!(st::State, parser::LookAhead)
+#     startpos = mark(st)
+#     calcnextstate!(st::State, parser.expr)
+#     reset(st, startpos)
+#     st
+# end
 
 function calcnextstate!(st::State, parser::Map)
     nextstate!(st, parser.expr)

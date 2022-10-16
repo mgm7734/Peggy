@@ -17,10 +17,10 @@ using Test
         @test runpeg(p, "dogma") == "dog"
         @test_throws ["ParseException", "cat", "dog"] runpeg(p, "do gma")
 
-        p = peggy(Peggy.Literal("a"; skiptrailing=r"X"), "b", "c")
+        p = peggy(peggy("a"; skiptrailing=r"X*"), "b", "c")
         @test runpeg(p, "abcd") == ("a", "b", "c")
         @test runpeg(p, "aXbcd") == ("a", "b", "c")
-        @test_throws ["ParseException"] runpeg(p, "aXXbc")
+        @test_throws ["ParseException"] runpeg(p, "aXXc")
         @test_throws ["ParseException"] runpeg(p, "a bc")
     end
 
@@ -151,6 +151,16 @@ using Test
             @test @peg( { "a" } )( "abc" ) == "a"
             @test @peg( { "a" :> identity } )( "abc" ) == "a"
             @test @peg( { a="a" :> { a } } )( "abc" ) == "a"
+
+            @test @peg({ a="a" "←" b="b" })("a  ← b ") == ("a", "b")
+
+            p = @peg begin 
+                start = { "a" followedby("b") } 
+            end
+            @test p("a b") == ("a", ())
+            
+            @test @peg({ [ "a" ] })( "a" ) == [ "a" ]
+            @test @peg({ [ "a" ] })( "" ) == [ ]
 
            # @test @peg( { "a" "b" } )( "abc" ) == ("a", "b")
            # @test @peg( { "a" "b" : } )( "abc" ) == ()

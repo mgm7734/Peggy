@@ -11,8 +11,14 @@ function Base.show(io::IO, ::MIME"text/plain", p::Parser)
 end
 
 pretty(io::IO, p, _) = pretty(io::IO, p)
+function pretty(io::IO, pre::String, p, post::String)
+    print(io, pre)
+    pretty(io, p)
+    print(io, post)
+end
 #pretty(io::IO, p) = Base.show(io::IO, MIME("text/plain"), p)
-pretty(io::IO, p::Literal) = show(io, MIME("text/plain"), p.value)
+#pretty(io::IO, p::Literal) = show(io, MIME("text/plain"), p.value)
+pretty(io::IO, p::Fail) = print(io, p.message)
 function pretty(io::IO, p::LookAhead) 
     print(io, "followedby(")
     pretty(io,  p.expr)
@@ -20,6 +26,9 @@ function pretty(io::IO, p::LookAhead)
 end
 pretty(io::IO, p::RegexParser) = showparser(io, p)
 pretty(io::IO, p::GramRef) = print(io, string(p.sym))
+
+ pretty(io::IO, p::Not{<:Not}) = pretty(io::IO, "followedby(", p.expr.expr, ")")
+   
 function pretty(io::IO, p::Not)
     if p.expr == ANY()
         print(io, "END()")
@@ -101,9 +110,9 @@ end
 pretty(io::IO, parser::LeftRecursive) = pretty(io, parser.parser)
 
 function pretty(io::IO, parser::Grammar)
-    print(io, "begin ")
-    join(io, (sprint(prettyrule, sym, p) for (sym,p) in parser.dict), "; ")
-    print(io, " end")
+    print(io, "begin\n  ")
+    join(io, (sprint(prettyrule, sym, p) for (sym,p) in parser.dict), "\n  ")
+    print(io, "\nend")
 end
 function prettyrule(io, sym, p)
     print(io, sym, "=")
@@ -157,22 +166,8 @@ function showparserlist(io, before, parsers, after=""; delim = ", ", last=delim)
     Base.print(io, after)
 end
 
-showparser(io::IO, parser::Literal) = show(io, parser.value)
-showparser(io::IO, parser::RegexParser) = show(io, parser.re)
-function showparser(io::IO, parser::NonemptyRegex)
-    if (parser.re.pattern == ".")
-        print(io, "ANY()")
-    else
-        print(io, "CHAR(\"")
-        print(io, parser.re.pattern[2:end-1])
-        print(io, "\")")
-    end
-end
-#showparser(io::IO, parser::Sequence) = showparserlist(io, "[", parser.exprs, "]")
-#function showparser(io::IO, parser::MappedSequence)
-#    # TODO
-#    showparserlist(io, "[", map(first, parser.namedparsers), "]")
-#end
+showparser(io::IO, parser::RegexParser) = print(io, parser.pretty)
+
 showparser(io::IO, parser::OneOf) = showparserlist(io, "oneof(", parser.exprs, ")")
 function showparser(io::IO, parser::Many)
     Base.print(io, "many(")
@@ -184,7 +179,10 @@ function showparser(io::IO, parser::Many)
     Base.print(io, ")")
 end
 
+#showparser(io::IO, parser::Not) = showparserlist(io, "not(", [parser.expr], ")")
 showparser(io::IO, parser::Not) = showparserlist(io, "not(", [parser.expr], ")")
+showparser(io::IO, parser::Not{<:Not}) = showparserlist(io, "followedby(", [parser.expr.expr], ")")
+
 function showparser(io::IO, parser::Map) 
     showparser(io, parser.expr)
     Base.print(io, " => ")

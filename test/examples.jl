@@ -87,52 +87,53 @@ peg_grammar = grammar(
         :NEWLINE => oneof("\r\n", "\r", "\n"),
     )
 =#
-peggy = @peg begin
-    parser =  grammar || expression
+peggypeg = @peg begin
+    parser =  { "" v=( grammar | expression ) END() }
     
     grammar = { # just Julia syntax for a block of `rule` productions
         _begin r1=rule rs={ _sep1 rule }*_  _end            :> { Peggy.Grammar(r1.first, Dict(rule, rs...)) }
         "(" r1=rule _sep2 rs={ _sep2 rule } ")"             :> { Peggy.Grammar(r1.first, Dict(rule, rs...)) }
     } 
     _begin = { "begin" [ _sep1 ] }
-    _sep1 = (";" || "\n")+_
+    _sep1 = (";" | "\n")+_
     _sep2 = { 
-        ";" (";" || "\n")*_ 
+        ";" (";" | "\n")*_ 
     }
     rule = { rule_name "=" expession                        :> { rule_name => expression } }
     rule_name = { Identifier        :> Symbol }
     
     expression = {
         # `expr |> f1=expr |> fn` is valid if f1 returns a `Parser`.
-        expression ":>" fn=julia_expression                   :> { Peggy.Map(fn, expression) }
+        alt_expr ":>" fn=julia_expression                   :> { Peggy.Map(fn, alt_expr) }
         alt_expr
     }
     alt_expr =  {
-        a1=rep_expr as={"||" rep_expr}*_                    :> { OneOf(a1, as...)}
+        a1=rep_expr as={"|" rep_expr}*_                    :> { OneOf([a1, as...])}
         rep_expr
     }
     rep_expr= {
-        primary_expr "*" c=cardnality                       :> { Many(neg_expr, c.min, c.max) }
-        primary_expr "+" "_"                                :> { Many(neg_expr, 1, nothing) }
-        "[" primary_expr "]"                                :> { Many(neg_expr, 0, 1) }
-        "!" primary_expr                                :> Peggy.Not
+        primary_expr "*" c=cardnality                       :> { many(primary_expr; min=c.min, max=c.max) }
+        primary_expr "+" "_"                                :> { many(primary_expr; min=1, max=missing) }
+        "[" primary_expr "]"                                :> { many(primary_expr; min=0, max=1) }
+        "!" primary_expr                                    :> Peggy.Not
+        primary_expr
     }
     cardnality = {
         "_"                                             :> { (min=0, max=nothing) } 
         "(" min=Number ":" max=Number ")"
-        Number                                          :> { min=Number, max=nothing }
+        Number                                          :> { ( min=Number, max=nothing ) }
     }
     primary_expr = {
-        String                                          :> Peggy.Literal
-        Regex                                           :>  Peggy.GeneralRegexParser
-        ":[" s=String "]"                                :> { Peggy.NonemptyRegex(Regex("[$s]")) } 
-        ":."                                            :> { Peggy.NonemptyRegex(r".") }
+        String                                          :> peggy
+        Regex                                           :> peggy
+        "CHAR(" s=String ")"                                :> { CHAR(s) } 
+        "ANY()"                                            :> { ANY() }
         "followedby(" e=expression ")"                  :> { LookAhead(e) }
         "{" !"{" sequence_body "}"
         "(" expression ")"
     }
     
-    sequence_body = mapped_sequence || sequence 
+    sequence_body = mapped_sequence | sequence 
     mapped_sequence = { 
         s=sequence ":> {" Action "}"                 :> { Peggy.Map(make_action(names(s), Action), s) }
     }
@@ -146,20 +147,20 @@ peggy = @peg begin
     
     # Julia parsed items w/ approximate implementations
 
-    Number = { ds=["0-9"]+_                         :> { parse(Int, ds) } }
+    Number = { ds=CHAR("0-9")+_                         :> { parse(Int, ds) } }
 
     Identifier = {
-        c1=:["[:alpha:]_"] cs=:["[:alnum:]_!"]*_      :> { Symbol(*(c1, cs...)) }
+        c1=CHAR("[:alpha:]_") cs=CHAR("[:alnum:]_!")*_      :> { Symbol(*(c1, cs...)) }
     }
     Action = {
-        { cs=:["."]*_                                     :> { Meta.parse(*(cs)) } }
+        { cs=CHAR(".")*_                                     :> { Meta.parse(*(cs)) } }
     }
     String = {
-        "\"" cs=qchar*_ "\""                        :> { Meta.parse(*(cs)) }
+        "\"" cs=qchar*_ "\""                        :> { *("", cs...) }
     }
     qchar = { 
         "\\" c={"\"" ; "\\"}                         # :> { "\\$c" }
-        !({"\"" ; "\\"}) c=r"."
+        !({"\"" ; "\\"}) c=ANY()
     }
     Regex = { "r\"" s=String "\""                    :> { Regex(s)} }
 end;

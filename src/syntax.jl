@@ -37,8 +37,8 @@ Any PEG parser is also a valid PEG expression There are a few other combinators 
     - [`many(peg_expr)`](@ref) - matches zero or more, yields a `AbstractVector` of the results
     - [`not(peg_expr)`](@ref) - matches only if `peg_epxr` fails. Yields `()`
 """
-pegparser(s::AbstractString) = Literal(s)
-pegparser(re::Regex) = GeneralRegexParser(re)
+pegparser(s::AbstractString) = peggy(s)
+pegparser(re::Regex) = peggy(re)
 pegparser(s::Symbol) = GramRef(s)
 # pegparser(v::AbstractVector) = Sequence(map(pegparser, v))
 function pegparser(pair::Pair) 

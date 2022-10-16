@@ -55,7 +55,7 @@ end
 rule(e) = nothing
 
 peg(name::Symbol) = :(Peggy.GramRef($(Expr(:quote, name))))
-peg(s::String) = :(Peggy.Literal($s))
+peg(s::String) = :(peggy($s))
 
 function peg(expr::Expr)
     debug && @info "peg" expr
@@ -71,13 +71,13 @@ function peg(expr::Expr)
             min = a
             max = b
         end
-        :(Many($(peg(e)), $min, $max))
+        :(many($(peg(e)), min=$min, max=$max))
     elseif @capture(expr, e_ + n_) && n === :_
-        :(Many($(peg(e)), 1, missing))
+        :(many($(peg(e)), min=1, max=missing))
     elseif @capture(expr, CHAR[s_String])
-        :(Peggy.NonemptyRegex(Regex("[" * $s * "]")))
+        :(Peggy.RegexParser(Regex("[" * $s * "]"); canmatchempty=false))
     elseif @capture(expr, CHAR[])
-        :(Peggy.NonemptyRegex(Regex(".")))
+        :(Peggy.RegexParser(Regex("."); canmatchempty=false))
     elseif @capture(expr, op_Symbol(e__)) && op in [:(!), :(|)]
         parsers = map(peg, e)
         Expr(:call, op, parsers...)
@@ -102,7 +102,11 @@ end
 
 function pegrow(row)
     debug && @info "pegrow" row Meta.show_sexpr(row)
-    if !isexpr(row, :row)
+    if isexpr(row, :vect)
+        # edge case: { [ expr ]}
+        (_, p) = pegseqitem(row)
+        return p
+    elseif !isexpr(row, :row)
         return peg(row)
     end
     args = row.args
@@ -148,7 +152,7 @@ function pegseqitem(item)
         (item, peg(item))
     elseif @capture(item, [ row_ ; rows__])
         p = pegcurly(row, rows)
-        (:_, :(Many($p, 0, 1)))
+        (:_, :(many($p, min=0, max=1)))
     elseif isexpr(item, :hcat)
         p = pegrow(Expr(:row, item.args...))
         (:_, :(Many($p, 0, 1)))

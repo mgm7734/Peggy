@@ -1,4 +1,4 @@
-export Parser, Literal, RegexParser
+export Parser, RegexParser
 
 """
     (parser::Parser)(input)
@@ -6,29 +6,39 @@ export Parser, Literal, RegexParser
 A `Peggy.Parser` is function that takes a string as input and returns its parsed value.
 """
 abstract type Parser end
-
+    
+function canmatchempty(p::Parser)
+    @warn("maybempty not defined for $(typeof(p))")
+    true
+end
 peggy(p::Parser) = p
 
-struct Literal <: Parser
-    value
-    skiptrailing
-end
-Literal(s; skiptrailing=r"\s*") = Literal(s, skiptrailing)
-peggy(s::String; skiptrailing=r"\s*") = Literal(s, skiptrailing)
+peggy(s::AbstractString; skiptrailing=r"\s*") = RegexParser(Regex("\\Q$s\\E"); canmatchempty=(length(s) == 0), trailing_re=skiptrailing, pretty=s)
 
-abstract type RegexParser <: Parser end
-
-struct GeneralRegexParser <: RegexParser
+struct RegexParser <: Parser
     re::Regex
+    canmatchempty::Bool
+    pretty::AbstractString
+    RegexParser(value_re::Regex; trailing_re::Regex = r"", canmatchempty = true, pretty=string(value_re)) =
+        new(Regex("^($(value_re.pattern))$(trailing_re.pattern)"), canmatchempty, pretty)
 end
+function valueAndConsume(p::RegexParser, s::AbstractString)
+    m = match(p.re, s)
+    m === nothing && return nothing
+    (value=m.captures[1], consume=m.match.ncodeunits)
+end
+peggy(r::Regex) = RegexParser(r)
 
-"""
-Succeeds with a non-empty value.
-"""
-struct NonemptyRegex <: RegexParser
-    re::Regex
+struct Not{T<:Parser} <: Parser
+    expr::T
 end
-peggy(r::Regex) = NonemptyRegex(r)
+Base.:(!)(p::Parser) = Not(p)
+"""
+    not(p)
+
+Create a parser that fails if parser `p` succeeds. Otherwise it succeeds with value `()`
+"""
+not(p) = Not(peggy(p))
 
 """
     CHAR(charclass::String)
@@ -54,22 +64,24 @@ julia> g("1234")
 """
 function CHAR(charclass::String) 
     try 
-        NonemptyRegex(Regex("[$charclass]"))
+        RegexParser(Regex("[$charclass]"); canmatchempty=false, pretty="CHAR(\"$charclass\"")
     catch ex
         error("Invalid characer class \"$charclass\" ($( ex.msg ))")
         print(e)
     end
 end
 
+const _ANY = RegexParser(r"."; canmatchempty=false, pretty="ANY()")
 """
 A PEG parser that matches any character and yields it as a string.
 """
-ANY() = NonemptyRegex(r".")
+ANY() = _ANY
 
+const _END = Peggy.Not(_ANY)
 """
 A PEG parser that matches the end of the input; yields result `()`.
 """
-END() = !ANY()
+END() = _END
 
 struct NamedSequence <: Parser
     items::Vector{@NamedTuple{name::Symbol, parser::Parser,keepvalue::Bool}}
@@ -94,21 +106,12 @@ sequence(items) = NamedSequence(items)
 #Sequence(items) = sequence(items)
 peggy(item1, item2, items...) = NamedSequence([item1, item2, items...])
 peggy(items::Tuple) = NamedSequence(collect(items))
-#    #NamedSequence(map((np, k)->combine(first(np), last(np), k), zip(items, keepvalues(items))))
-#    NamedSequence([( name=first(np), parser=last(np), keepvalue=k  )
-#                    for (np, k) in zip(items, keepvalues(first(i) for i in items))])
-#end
-#Base.keys(p::NamedSequence) = tuple((i.name for i in p.items if i.keepvalue)...)
-#parsers(p::NamedSequence) = map(last, p)
-#function keepvalues(names) 
-#    [ length(names) == 1 || !startswith(string(n), "_")
-#      for n in names]
-#end
 
 struct OneOf <: Parser
     exprs
 end
 Base.:(|)(a::Parser, b::Parser) = OneOf([a, b])
+
 """
     oneof(pegexpr...)
 
@@ -120,7 +123,7 @@ struct Many <: Parser
     expr::Parser
     min
     max
-    end
+end
 Many(e) = Many(e, 0, missing)
 Base.:(*)(p::Parser, minimum::Int) = Many(p, minimum, missing)
 Base.:(*)(p::Parser, minmax::UnitRange) = Many(p, minmax.start, minmax.stop)
@@ -131,29 +134,28 @@ Create a parser that matches zero or more repititions of the sequence `expr...`;
 """
 many(pegexpr...; min=0, max=missing) = Many(peggy(pegexpr...),min,max)
 
-
-struct Not <: Parser
-    expr::Parser
-end
-Base.:(!)(p::Parser) = Not(p)
-"""
-    not(p)
-
-Create a parser that fails if parser `p` succeeds. Otherwise it succeeds with value `()`
-"""
-not(p) = Not(peggy(p))
-
 struct Fail <: Parser
     message
 end
+
 """
+    fail(message) => Parser
+
+A parser that always fails with the given message.
+
+Useful for error messages.
 """
 fail = Fail
 
 struct LookAhead <: Parser
     expr
 end
-followedby(e) = LookAhead(parser(e))
+"""
+    followedby(expr)
+
+Create a parser that matches `expr` but consumes nothing.
+"""
+followedby(e) = not(not(e)) #LookAhead(parser(e))
 
 struct Map <: Parser
     callable
@@ -180,85 +182,57 @@ end
 struct Grammar <: Parser
     root::GramRef
     dict::Dict{Symbol,Parser}
-    # jGrammar(root,dict) = new(root, dict, left_resursive_names(dict))
+
     function Grammar(root,dict) 
-        lrnames = left_resursive_names(dict)
-        dict = Dict((name => (name in lrnames) ? LeftRecursive(p) : p)
-                    for (name, p) in dict)
-        new(root, dict)
+        c = Compiler(dict)
+        new(root, Dict(n => compile(c, n) for n in keys(dict)))
     end
 end
 
-function left_resursive_names(productions)
-    emptysyms = Dict{Symbol,Bool}()
-    maybeempty(p::Literal) = p == ""
-    maybeempty(p::GeneralRegexParser) = true
-    maybeempty(p::NonemptyRegex) = false
-    # maybeempty(p::Sequence) = all(maybeempty, p.exprs)
-    maybeempty(p::NamedSequence) = all(maybeempty, getfield.(p.items, :parser))
-    #maybeempty(p::MappedSequence) = all(maybeempty, map(first, p.namedparsers))
-    maybeempty(p::OneOf) = any(maybeempty, p.exprs)
-    maybeempty(p::Many) = true
-    maybeempty(p::Not) = true
-    maybeempty(p::Map) = maybeempty(p.expr)
-    function maybeempty(p::GramRef)  
-        r = get(emptysyms, p.sym, nothing)
-        if r === nothing
-            # in case recursive
-            emptysyms[p.sym] = false
-            emptysyms[p.sym] = r = maybeempty(productions[p.sym])
+struct Compiler
+    parser::Dict{Symbol,Parser}
+    leftcalls::Dict{Symbol,Set{Symbol}}
+    canmatchempty::Dict{Symbol,Bool}
+    function Compiler(name2parser)
+        self = new(name2parser, Dict(n=>Set() for n in keys(name2parser)), Dict())
+        for (n, p) in name2parser
+            addleftcalls(self, p, n)
         end
-        r
+        self
     end
-
-    #@info "empty syms" Dict(k=>maybeempty(GramRef(k)) for k in keys(productions))
-        
-    leftrefs = Dict(k=>Set() for k in keys(productions))
-    addlrefs(::Literal, name, allowed) = ()
-    addlrefs(::RegexParser, name::Symbol, allowed) = ()
-    # function addlrefs(p::Sequence, name::Symbol, allowed = false)
-    #     for p2 in p.exprs
-    #         addlrefs(p2, name, allowed)
-    #         maybeempty(p2) || return
-    #     end
-    # end
-    function addlrefs(parser::NamedSequence, name::Symbol, allowed=false)
-        for item in parser.items
-            addlrefs(item.parser, name, allowed)
-            maybeempty(item.parser) || return
-        end
-    end
-    #function addlrefs(p::MappedSequence, name::Symbol, allowed = false)
-    #    for (p2,_) in p.namedparsers
-    #        addlrefs(p2, name, allowed)
-    #        maybeempty(p2) || return
-    #    end
-    #end
-    function addlrefs(p::OneOf, name::Symbol, allowed = false)
-        for p2 in p.exprs
-            addlrefs(p2, name, allowed)
-            allowed |= !maybeempty(p2)
-        end
-    end
-    function addlrefs(p::Many, name::Symbol, allowed = false) 
-        addlrefs(p.expr, name, allowed)
-    end
-    function addlrefs(p::Not, name::Symbol, allowed = false) 
-        addlrefs(p.expr, name, allowed)
-    end
-    function addlrefs(p::Map, name::Symbol, allowed = false) 
-        addlrefs(p.expr, name, allowed)
-    end
-    function addlrefs(p::GramRef, name::Symbol, allowed = false) 
-        result = leftrefs[name]
-        push!(result, p.sym, leftrefs[p.sym]...)
-    #!allowed && name in result && @warn("'$name' has invalid left recursion")
-    end
-
-    for n in keys(productions)
-        addlrefs(productions[n], n, false)
-    end
-
-    Set(name for (name,refs) in leftrefs if name in refs)
 end
+compile(c, n) = n in c.leftcalls[n] ? LeftRecursive(c.parser[n]) : c.parser[n]
 
+addleftcalls(c, p::GramRef, name) = 
+    push!(c.leftcalls[name], p.sym, c.leftcalls[p.sym]...)
+
+addleftcalls(c, parser::NamedSequence, name) =
+    for item in parser.items
+        addleftcalls(c, item.parser, name)
+        canmatchempty(c, item.parser) || return
+    end
+addleftcalls(c, parser::OneOf, name) =
+    for p in parser.exprs
+        addleftcalls(c, p, name)
+    end
+addleftcalls(c, parser::Union{Many,Map,Not,LookAhead}, name) = addleftcalls(c, parser.expr, name)
+addleftcalls(c, p::RegexParser, _) = nothing
+
+#addleftcalls(c, parser, name) = nothing
+
+canmatchempty(c, p::GramRef) = begin
+    sym = p.sym
+    result = get(c.canmatchempty, sym, nothing)
+    if result === nothing
+        c.canmatchempty[sym] = false
+        c.canmatchempty[sym] = result = canmatchempty(c, c.parser[sym])
+    end
+    result
+end
+canmatchempty(c, p::NamedSequence) = all(item -> canmatchempty(c, item.parser), p.items)
+canmatchempty(c, p::OneOf) = any(parser -> canmatchempty(c, parser), p.exprs)
+canmatchempty(c, p::Many) = p.min == 0 || canmatchempty(c, p.expr)
+canmatchempty(c, p::Map) = canmatchempty(c, p.expr)
+canmatchempty(c, p::RegexParser) = p.canmatchempty
+canmatchempty(c, p::Union{LookAhead,Not}) = true
+canmatchempty(c, p::Fail) = false
