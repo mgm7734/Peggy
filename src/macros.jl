@@ -76,15 +76,11 @@ function peg(expr::Expr)
         :(many($(peg(e)), min=1, max=missing))
     elseif @capture(expr, CHAR[s_String])
         :(Peggy.RegexParser(Regex("[" * $s * "]"); canmatchempty=false))
-    elseif @capture(expr, CHAR[])
-        :(Peggy.RegexParser(Regex("."); canmatchempty=false))
     elseif @capture(expr, op_Symbol(e__)) && op in [:(!), :(|)]
         parsers = map(peg, e)
         Expr(:call, op, parsers...)
     else
         expr
-        #dump(expr)
-        #report("Peggy is confused by $expr")
     end
 end
 

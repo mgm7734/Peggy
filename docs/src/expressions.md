@@ -17,15 +17,14 @@ julia>  (@peg { "hello" "Peggy" })( "hello Peggy!" )
 ("hello", "Peggy")
 ```
 
-By default, trailing whitespace is ignored. You can alter this behavior with the lower-level `peggy` function:
-You can change the default trailing whitespace:
+By default, surroundq whitespace is ignored. You can alter this behavior with the lower-level `peggy` function:
 
 ```jldoctest peggy
-julia> (@peg { peggy("a"; skiptrailing=r"") "b"  })( "a b" )
-ERROR: ParseException @ (no file):1:2
-a b
- ^
-expected: b
+julia> (@peg { peggy("a"; whitespace=r"") "b"  })( " ab" )
+ERROR: ParseException @ (no file):1:1
+ ab
+^
+expected: "a"
 [...]
 ```
 
@@ -43,7 +42,7 @@ julia> ( @peg "a"*2 )( "a" )
 ERROR: ParseException @ (no file):1:2
 a
  ^
-expected: a
+expected: "a"
 [...]
 ```
 
@@ -63,7 +62,7 @@ julia> (@peg { "a"*(2:3) })( "ab" )
 ERROR: ParseException @ (no file):1:2
 ab
  ^
-expected: a
+expected: "a"
 [...]
 ```
 
@@ -93,8 +92,10 @@ julia> (@peg { "a"*_ "b" END() })( "aaab" )
 (SubString{String}["a", "a", "a"], "b", ())
 ```
 
-If any sequence item is named, only the named items are in the value.  If there is only
-one value, it is returned directly rather than as a NTuple{1}
+Each sequence items has a name.  Grammar references are already a name.  Other types of items are givent the default name "_", but a different name can be assigned with `=`.
+
+Items with names that start with "_" are discared.   If only one item remains, its value becomes the value of the sequence.
+Otherwise the value is a tuple of the named item values.
 
 ```jldoctest peggy
 julia> (@peg { result="a"*_ "b" END() })( "aaab" ) 
@@ -148,42 +149,49 @@ expected: END()
 ## Character class
 
 ```jldoctest peggy
-julia> ( @peg CHAR("[:alpha:]_")*_  )( "böse_7734!" )
+julia> ( CHAR("[:alpha:]_")*0  )( "böse_7734!" )
 5-element Vector{SubString{String}}:
  "b"
  "ö"
  "s"
  "e"
  "_"
+
+julia> ( @peg( CHAR["[:alpha:]"]*_ ) )("ok")
+2-element Vector{SubString{String}}:
+ "o"
+ "k"
 ```
 
 
 ## Grammar
 
+Here's the PEG syntax from ["wikipedia"](https://en.wikipedia.org/wiki/Parsing_expression_grammar)
+
 ```jldoctest peggy
-julia> g = @peg begin
-       grammar = { rules=rule+_             :> { peggy(rules...) } }
-       rule = { name "←" alts               :> { name => alts }}
-       alts = { choice cs={ "/" choice }*_  :> { oneof(choice, cs...)} }
-       choice = expr+_
-       expr = {
+julia> wikisyntax = @peg begin
+       grammar = { rules=rule+_             :> { grammar(rules...) } }
+       rule = { name "←" expr               :> { name => expr }}
+       expr = { alt as={ "/" alt }*_        :> { oneof(alt, as...)} }
+       alt =  { is=item+_                   :> { peggy((:_=>i for i in is)...) } }
+       item = {
             prim "*"                        :> { many(prim) }
             prim "+"                        :> { many(prim; min=1) }
             prim "?"                        :> { many(prim; max=1) }
-            "&" expr                        :> { followedby(expr) }
-            "!" expr                        :> { !expr }
+            "&" prim                        :> { followedby(prim) }
+            "!" item                        :> { !item }
             prim
        }
        prim = { 
             name !"←" 
             "[" charclass "]"               :> { CHAR(charclass) }
             "'" string "'"                  :> { peggy(string) }
-            "(" alts ")"
+            "(" expr ")" 
             "."                             :> _ -> ANY()
        }
-       name = { cs=CHAR("[:alpha:]_")+_ CHAR(raw"\s")*_     :> { *(cs...) } }
+       name = { cs=CHAR("[:alpha:]_")+_ CHAR(raw"\s")*_     :> { Symbol(cs...) } }
        charclass = {
-            "-" ["]"] CHAR("^]")*_          :> t -> string(t[1], t[2]..., t[3]...)
+            "-" [ "]" ] CHAR("^]")*_        :> t -> string(t[1], t[2]..., t[3]...)
             "]" CHAR("^]")*_                :> t -> string(t[1], t[2]...)
             CHAR("^]")+_                    :> t -> string(t...)
        }
@@ -191,11 +199,37 @@ julia> g = @peg begin
        end;
 ```
 
+Here's the non-CFG example that matches aⁿbⁿcⁿ:
+
+```jldoctest peggy
+julia> S = wikisyntax("""
+       S ← &(A 'c') 'a'+ B !.
+       A ← 'a' A? 'b'
+       B ← 'b' B? 'c'
+       """)
+@peg(begin
+  A={ "a" [A] "b" }
+  B={ "b" [B] "c" }
+  S={ followedby({ A "c" }) "a"+_ B END() }
+end)
+```
+
+```jldoctest peggy
+julia> S("aabbc")
+ERROR: ParseException @ (no file):1:6
+aabbc
+     ^
+expected: "c"
+[...]
+```
+
 ### Left recursion
 
 ## Not
 
 ## Lookahead
+
+[`followedby`](@ref)
 
 ## Failure
 

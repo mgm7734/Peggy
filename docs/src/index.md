@@ -9,7 +9,7 @@ using Peggy
 Features:
 
 - pretty good syntax error messages. 
-- detects and correctly handles left-recursion
+- detects indirect left-recursive rules during compilation. Only left-recursive rules pay a performance cost
 - both combinator functions and a macro are provided
 
 A [`Peggy.Parser`](@ref) is function that takes a string as input and returns its parsed value.

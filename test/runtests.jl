@@ -17,11 +17,11 @@ using Test
         @test runpeg(p, "dogma") == "dog"
         @test_throws ["ParseException", "cat", "dog"] runpeg(p, "do gma")
 
-        p = peggy(peggy("a"; skiptrailing=r"X*"), "b", "c")
+        p = peggy(peggy("a"; whitespace=r"X*"), "b", "c")
         @test runpeg(p, "abcd") == ("a", "b", "c")
-        @test runpeg(p, "aXbcd") == ("a", "b", "c")
+        @test runpeg(p, "XXaX b cd") == ("a", "b", "c")
         @test_throws ["ParseException"] runpeg(p, "aXXc")
-        @test_throws ["ParseException"] runpeg(p, "a bc")
+        @test_throws ["ParseException"] runpeg(p, " abc")
     end
 
    # p = peggy("abc")
@@ -195,31 +195,30 @@ using Test
             @test_throws ParseException p("C.")
         end
 
-        #=
-        g = @grammar begin
-            start = [
-                space expr !anych() {expr}
-            ]
-            expr = [
-                expr "+" space term {expr + term}
-                expr "-" space term {expr - term}
+        # #=
+        g = @peg begin
+            start = { 
+                "" expr END()
+            }
+            expr = { 
+                expr "+" term   :> { expr + term }
+                expr "-" term   :> { expr - term }
                 term
-            ]
-            term = [
-                term "*" space prim {term * prim}
-                term "|" space prim {term | prim}
+            }
+            term = {
+                term "*" prim   :> { term * prim }
+                term "/" prim   :> { term / prim }
                 prim
-            ]
-            prim = [
-                number _=space # "_:" un-names the expression
+            }
+            prim = {
                 "(" expr ")"
-            ]
-            number = [
-                D=anych("[:digit:]") DS=(anych("[:digit:]")...) {parse(Int, *(D, DS...))}
-            ]
-            space = many(anych("[:space:]"))
+                number 
+            }
+            number = {
+                ds=CHAR("[:digit:]")+_ ""    :> { parse(Int, *(ds...)) }
+            }
         end
-        @test g("1+2*3+10|2 - 4") == 8
+        @test g("1 + 2*3 + 30 / 3 / 2 - 4") == 8
         #2# =#
     end
 

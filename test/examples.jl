@@ -164,3 +164,10 @@ peggypeg = @peg begin
     }
     Regex = { "r\"" s=String "\""                    :> { Regex(s)} }
 end;
+
+# a^n b^n c^n
+abc = @peg begin
+    s = { !!({ ab "c" }) "a"+_ bc END()}
+    ab = { "a" [ ab ] "b" }
+    bc = { "b" [ bc ] "c" }
+end

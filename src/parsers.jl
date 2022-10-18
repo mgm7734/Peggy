@@ -13,25 +13,32 @@ function canmatchempty(p::Parser)
 end
 peggy(p::Parser) = p
 
-peggy(s::AbstractString; skiptrailing=r"\s*") = RegexParser(Regex("\\Q$s\\E"); canmatchempty=(length(s) == 0), trailing_re=skiptrailing, pretty=s)
+peggy(s::AbstractString; whitespace=r"[[:space:]]*") = 
+    RegexParser(Regex("\\Q$s\\E"); canmatchempty=(length(s) == 0), whitespace, pretty=sprint(show, s))
 
 struct RegexParser <: Parser
     re::Regex
     canmatchempty::Bool
     pretty::AbstractString
-    RegexParser(value_re::Regex; trailing_re::Regex = r"", canmatchempty = true, pretty=string(value_re)) =
-        new(Regex("^($(value_re.pattern))$(trailing_re.pattern)"), canmatchempty, pretty)
+    RegexParser(value_re::Regex; 
+            whitespace::Regex = r"",
+            canmatchempty = true, 
+            pretty=string(value_re)) =
+        new(Regex("^$(whitespace.pattern)(?<value>$(value_re.pattern))$(whitespace.pattern)"), canmatchempty, pretty)
 end
 function valueAndConsume(p::RegexParser, s::AbstractString)
     m = match(p.re, s)
     m === nothing && return nothing
-    (value=m.captures[1], consume=m.match.ncodeunits)
+    (value=m["value"], consume=m.match.ncodeunits)
 end
 peggy(r::Regex) = RegexParser(r)
 
 struct Not{T<:Parser} <: Parser
     expr::T
 end
+"""
+   !(p::Parser) == not(p)
+"""
 Base.:(!)(p::Parser) = Not(p)
 """
     not(p)
@@ -110,6 +117,11 @@ peggy(items::Tuple) = NamedSequence(collect(items))
 struct OneOf <: Parser
     exprs
 end
+"""
+     p1::Parser | p2::Parser == oneof(p1, p2)
+
+A short-form for [`oneof`](@ref).
+"""
 Base.:(|)(a::Parser, b::Parser) = OneOf([a, b])
 
 """
@@ -125,6 +137,10 @@ struct Many <: Parser
     max
 end
 Many(e) = Many(e, 0, missing)
+"""
+    p::Parser * n == many(p; min=n)
+    p::Parser * (a:b) == many(p; min=a, max=b)
+"""
 Base.:(*)(p::Parser, minimum::Int) = Many(p, minimum, missing)
 Base.:(*)(p::Parser, minmax::UnitRange) = Many(p, minmax.start, minmax.stop)
 """
@@ -151,11 +167,12 @@ struct LookAhead <: Parser
     expr
 end
 """
-    followedby(expr)
+    followedby(expr...)
+    !!(e::Parser)
 
 Create a parser that matches `expr` but consumes nothing.
 """
-followedby(e) = not(not(e)) #LookAhead(parser(e))
+followedby(e...) = not(not(peggy(e...))) #LookAhead(parser(e))
 
 struct Map <: Parser
     callable
@@ -174,6 +191,7 @@ end
 struct GramRef <: Parser
     sym::Symbol
 end
+peggy(s::Symbol) = GramRef(s)
 
 struct LeftRecursive <: Parser
     parser:: Parser
@@ -188,6 +206,19 @@ struct Grammar <: Parser
         new(root, Dict(n => compile(c, n) for n in keys(dict)))
     end
 end
+"""
+    grammar([start::Symbol], (symbol => peg_expr)...)
+
+Create a parser from a set of productions, which are named, mutually recursive parsers.  
+
+Parsers that are members of a grammar can reference are member parser by their symbol.
+
+If `start` is omitted, the symbol of the first production is used.
+"""
+function grammar(start::Symbol, rules::Pair{Symbol}...) 
+    Grammar(GramRef(start), Dict(s => peggy(x) for (s,x) in rules))
+end
+grammar(rules::Pair{Symbol}...) = grammar(first(rules).first, rules...)
 
 struct Compiler
     parser::Dict{Symbol,Parser}

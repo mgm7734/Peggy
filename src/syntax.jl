@@ -1,16 +1,3 @@
-"""
-    grammar([start::Symbol], (symbol => peg_expr)...)
-
-Create a parser from a set of productions, which are named, mutually recursive parsers.  
-
-Parsers that are members of a grammar can reference are member parser by their symbol.
-
-If `start` is omitted, the symbol of the first production is used.
-"""
-function grammar(start::Symbol, production::Pair{Symbol}...) 
-    Grammar(GramRef(start), Dict(s => parser(x) for (s,x) in production))
-end
-grammar(rules::Pair{Symbol}...) = grammar(first(rules).first, rules...)
 
 """
     pegparser(peg_expr)
