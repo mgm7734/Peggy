@@ -22,8 +22,7 @@ mutable struct State
     value::MaybeValue
     resultcache::ResultCache
 end
-State(i, productions) = State(i, Dict(), 1, 0, [], nothing, ResultCache())
-State(i) = State(i, Dict())
+State(i) = State(i, Dict(), 1, 0, [], nothing, ResultCache())
 mark(st::State) = st.index
 function reset(st::State, pos)
     st.index = pos
@@ -65,8 +64,8 @@ Parse the input with the parser.
 Returns the resulting value or throws a `ParseException`.
 """
 function Base.parse(parser::Parser, input::AbstractString)
-    st = State(input)
-    if isfail(calcnextstate!(st, parser)) 
+    st = parse!(State(input), parser)
+    if isfail(st) 
         throw(ParseException(st))
     end
     value(st)
@@ -79,16 +78,14 @@ end
 Like `parser(input)`, but returns `nothing` if the parse fails.
 """
 function Base.tryparse(parser::Parser, input::AbstractString)
-    st = State(input)
-    if !isfail(calcnextstate!(st, parser)) 
+    st = parse!(State(input), parser)
+    if !isfail(st)
         value(st)
     end
 end
 
 
-nextstate!(st::State, parser) = calcnextstate!(st, parser)
-
-# function calcnextstate!(st::State, p::Literal)
+# function parse!(st::State, p::Literal)
 #     t = remainingtext(st)
 #     if startswith(t, p.value)
 #         consume = lastindex(p.value)
@@ -103,7 +100,7 @@ nextstate!(st::State, parser) = calcnextstate!(st, parser)
 #     end
 # end
 
-function calcnextstate!(st::State, parser::RegexParser)
+function parse!(st::State, parser::RegexParser)
     s = remainingtext(st)
     m = valueAndConsume(parser, s)
     #@info "csn regex" s parser m
@@ -114,10 +111,10 @@ function calcnextstate!(st::State, parser::RegexParser)
     end
 end
 
-#function calcnextstate!(st::State, p::Sequence) 
+#function parse!(st::State, p::Sequence) 
 #    values = [] 
 #    for p′ in p.exprs
-#         nextstate!(st, p′)
+#         parse!(st, p′)
 #        if isfail(st)
 #            return st
 #        end
@@ -127,10 +124,10 @@ end
 #    succeed!(st, tuple(values...))
 #end
 
-function calcnextstate!(st::State, p::NamedSequence) 
+function parse!(st::State, p::NamedSequence) 
     values = [] 
     for item in p.items
-        nextstate!(st, item.parser)
+        parse!(st, item.parser)
         if isfail(st)
             return st
         end
@@ -142,10 +139,10 @@ function calcnextstate!(st::State, p::NamedSequence)
     succeed!(st, v)
 end
 
-#function calcnextstate!(st::State, p::MappedSequence) 
+#function parse!(st::State, p::MappedSequence) 
 #    values = [] 
 #    for item in p.namedparsers
-#        if isfail(nextstate!(st, item.parser))
+#        if isfail(parse!(st, item.parser))
 #            return st
 #        end
 #        if (item.keepvalue)
@@ -156,24 +153,23 @@ end
 #    succeed!(st, v)
 #end
 
-function calcnextstate!(st::State, parser::OneOf)
+function parse!(st::State, parser::OneOf)
     ix = st.index
     for p in parser.exprs
-        nextstate!(st, p)
+        parse!(st, p)
         if !isfail(st)
             return st
         end
         st.index = ix
     end
     st
-    #fail!(st, parser)
 end
 
-function calcnextstate!(st::State, parser::Many)
+function parse!(st::State, parser::Many)
     values = []
     start = mark(st)
     while ismissing(parser.max) || length(values) < parser.max
-        nextstate!(st, parser.expr)
+        parse!(st, parser.expr)
         if isfail(st)
             break
         end
@@ -187,13 +183,13 @@ function calcnextstate!(st::State, parser::Many)
     end
 end
 
-function calcnextstate!(st, parser::Fail)
+function parse!(st, parser::Fail)
     fail!(st, parser)
 end
 
-function calcnextstate!(st::State, parser::Not)
+function parse!(st::State, parser::Not)
     ix = st.index
-    nextstate!(st, parser.expr)
+    parse!(st, parser.expr)
     if isfail(st)
         succeed!(st, ())
     else
@@ -202,15 +198,15 @@ function calcnextstate!(st::State, parser::Not)
     end
 end
 
-# function  calcnextstate!(st::State, parser::LookAhead)
+# function  parse!(st::State, parser::LookAhead)
 #     startpos = mark(st)
-#     calcnextstate!(st::State, parser.expr)
+#     parse!(st::State, parser.expr)
 #     reset(st, startpos)
 #     st
 # end
 
-function calcnextstate!(st::State, parser::Map)
-    nextstate!(st, parser.expr)
+function parse!(st::State, parser::Map)
+    parse!(st, parser.expr)
     if isfail(st)    
         st
     else
@@ -221,44 +217,51 @@ function calcnextstate!(st::State, parser::Map)
     end
 end
 
-function calcnextstate!(st::State, parser::Grammar)
+function parse!(st::State, parser::Grammar)
     st.productions = parser.dict
-    nextstate!(st, parser.root)
+    parse!(st, parser.root)
 end
-function calcnextstate!(st::State, ref::GramRef)
+
+function parse!(st::State, ref::GramRef)
     expr = st.productions[ref.sym]
-    # left recursion: https://medium.com/@gvanrossum_83706/left-recursive-peg-grammars-65dab3c580e1
-    startindex = st.index
-    refcache = cacheForGramRef(st.resultcache, ref)
-    savedresult = get(refcache, startindex, nothing) 
-    #debug && @info "start: $(ref.sym) at $(startindex)"
-    if savedresult === nothing
-        if expr isa LeftRecursive
-            expr = expr.parser
-            # prime cache with failure so an alternate rule succeeds
-            refcache[startindex] = savedresult = SavedResult(startindex, nothing)
-            while true
-                nextstate!(st, expr)
-
-                isfail(st) && break
-                st.index <= savedresult.endindex && savedresult.value !== nothing && break
-
-                savedresult.value =  st.value
-                savedresult.endindex = st.index
-                debug && @info "found :$(ref.sym) $startindex:$(savedresult.endindex) => $(savedresult.value)"
-
-                st.index = startindex
-            end
-            debug && @info "YIELD :$(ref.sym) $startindex:$(savedresult.endindex) => $(savedresult.value)"
-        else
-            savedresult = get!(cacheForGramRef(st.resultcache, ref), startindex) do
-                nextstate!(st, st.productions[ref.sym])
-                debug && !isfail(st) && @info ref.sym startindex st.index value(st)
-                SavedResult(st.index, st.value)
-            end
-        end
-    end
+    savedresult = cachedresult!(st, ref, expr)
     st.index = savedresult.endindex
     st.value = savedresult.value
     st
+end
+
+function cachedresult!(st, ref, expr)
+    refcache = cacheForGramRef(st.resultcache, ref)
+    get!(refcache, st.index) do
+        parse!(st, expr)
+        SavedResult(st.index, st.value)
+    end
+end
+
+function cachedresult!(st, ref, lr::LeftRecursive)
+    refcache = cacheForGramRef(st.resultcache, ref)
+    startindex = st.index
+    buildresult = false
+    savedresult = get!(refcache, startindex) do 
+        buildresult = true 
+        # prime cache with failure so an alternate rule can succeed
+        SavedResult(startindex, nothing)
+    end
+    if buildresult
+        expr = lr.parser
+        while true
+            parse!(st, expr)
+
+            isfail(st) && break
+            st.index <= savedresult.endindex && savedresult.value !== nothing && break
+
+            savedresult.value =  st.value
+            savedresult.endindex = st.index
+            debug && @info "found :$(ref.sym) $startindex:$(savedresult.endindex) => $(savedresult.value)"
+
+            st.index = startindex
+        end
+        debug && @info "YIELD :$(ref.sym) $startindex:$(savedresult.endindex) => $(savedresult.value)"
+    end
+    savedresult
 end
