@@ -5,36 +5,36 @@ using Test
 
     @testset "literal" begin
         p = peggy("abc")
-        @test runpeg(p, "abc") == "abc"
-        @test_throws ["ParseException", "1", "abc"] runpeg(p, "aboops")
+        @test parse(p, "abc") == "abc"
+        @test_throws ["ParseException", "1", "abc"] parse(p, "aboops")
 
         p = peggy("a", "b", "c")
-        @test runpeg(p, "a bcd") == ("a", "b", "c")
-        @test_throws ["ParseException", "3", "c"] runpeg(p, "aboops")
+        @test parse(p, "a bcd") == ("a", "b", "c")
+        @test_throws ["ParseException", "3", "c"] parse(p, "aboops")
 
         p = peggy(oneof("cat", "dog"))
-        @test runpeg(p, "catetonic") == "cat"
-        @test runpeg(p, "dogma") == "dog"
-        @test_throws ["ParseException", "cat", "dog"] runpeg(p, "do gma")
+        @test parse(p, "catetonic") == "cat"
+        @test parse(p, "dogma") == "dog"
+        @test_throws ["ParseException", "cat", "dog"] parse(p, "do gma")
 
         p = peggy(peggy("a"; whitespace=r"X*"), "b", "c")
-        @test runpeg(p, "abcd") == ("a", "b", "c")
-        @test runpeg(p, "XXaX b cd") == ("a", "b", "c")
-        @test_throws ["ParseException"] runpeg(p, "aXXc")
-        @test_throws ["ParseException"] runpeg(p, " abc")
+        @test parse(p, "abcd") == ("a", "b", "c")
+        @test parse(p, "XXaX b cd") == ("a", "b", "c")
+        @test_throws ["ParseException"] parse(p, "aXXc")
+        @test_throws ["ParseException"] parse(p, " abc")
 
         @test tryparse(p, " abc") === nothing
     end
 
    # p = peggy("abc")
    # p = many(oneof("a", "b"))
-   # @test runpeg(p, "") == []
-   # @test runpeg(p, "abbabca") == ["a", "b", "b", "a", "b"]
+   # @test parse(p, "") == []
+   # @test parse(p, "abbabca") == ["a", "b", "b", "a", "b"]
 
    # p = peggy("The end.", END())
 
-   # @test runpeg(p, "The end.") == ("The end.", ())
-   # @test_throws ["ParseException", "9"] runpeg(p, "The end...")
+   # @test parse(p, "The end.") == ("The end.", ())
+   # @test_throws ["ParseException", "9"] parse(p, "The end...")
 
    # p = @peg {
    #         {
@@ -45,11 +45,11 @@ using Test
    #             "backtrack!"
    #         } "."
    # }
-   # @test runpeg(p, "42.") == (42, ".")
-   # @test runpeg(p, "nix.") == (nothing, ".")
-   # @test runpeg(p, "cool.") == (:cool, ".")
-   # @test runpeg(p, "backtrack!.") == ("backtrack!", ".")
-   # @test_throws ["ParseException", "5"] runpeg(p, "oops!")
+   # @test parse(p, "42.") == (42, ".")
+   # @test parse(p, "nix.") == (nothing, ".")
+   # @test parse(p, "cool.") == (:cool, ".")
+   # @test parse(p, "backtrack!.") == ("backtrack!", ".")
+   # @test_throws ["ParseException", "5"] parse(p, "oops!")
 
    # maplast(vs) = map(last, vs)
    # p = @peg begin
@@ -58,7 +58,7 @@ using Test
    #     factor = { number ; { "(", :expr, ")" } }
    #     number = { CHAR[raw"\d"]+_ :> ds -> parse(Int, *(ds...)) }
    # end
-   # @test runpeg(p, "2+3*4+5") == 19
+   # @test parse(p, "2+3*4+5") == 19
 
     @testset "left-recursive" begin
         p = @peg begin

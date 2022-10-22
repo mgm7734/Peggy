@@ -57,20 +57,21 @@ function fail!(st::State, expected::Parser...)
 end
 
 """
-    runpeg(e::Parser, s::AbstractString) => result_value
+    Base.parse(p::Parser, s::AbstractString)
+    (p::Parser)(s:AbstractString)
 
 Parse the input with the parser.
 
 Returns the resulting value or throws a `ParseException`.
 """
-function runpeg(parser::Parser, input::AbstractString)
+function Base.parse(parser::Parser, input::AbstractString)
     st = State(input)
     if isfail(calcnextstate!(st, parser)) 
         throw(ParseException(st))
     end
     value(st)
 end
-runpeg(p, i) = runpeg(peggy(p), i)
+(parser::Parser)(input) = Base.parse(parser, input)
 
 """
     tryparse(parser, input)
@@ -84,7 +85,6 @@ function Base.tryparse(parser::Parser, input::AbstractString)
     end
 end
 
-(parser::Parser)(input) = runpeg(parser, input)
 
 nextstate!(st::State, parser) = calcnextstate!(st, parser)
 
