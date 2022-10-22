@@ -1,4 +1,4 @@
-# Peggy expresions
+# Peggy expression
 
 Use [`@peg`](@ref) to create a parser.  You can also use the underly constructor functions which
 is occasionally useful.
@@ -69,17 +69,17 @@ expected: "a"
 ### Sugar
 
 ```jldoctest peggy
-julia> @peg({ x*_ }) == @peg({ x*0 })
+julia> @peg(x*_) == @peg(x*0)
 true
 
-julia> @peg({ x+_ }) == @peg({ x*1 })
+julia> @peg(x+_) == @peg(x*1)
 true
 
 julia> @peg(a*1) == @peg(a*(1:missing))
 true
 
-julia> (@peg { [ a ] }) == (@peg { a*(0:1) })
-true
+julia> @peg{ a*(0:1) }
+@peg([a])
 ```
 
 

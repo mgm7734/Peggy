@@ -14,7 +14,7 @@ Features:
 
 A [`Peggy.Parser`](@ref) is function that takes a string as input and returns its parsed value.
 
-Create parsers using either a succinct [`Peggy expression`](#peggy-expresions) via the [`@peg`](@ref) macro
+Create parsers using either a succinct [Peggy expression](@ref) via the [`@peg`](@ref) macro
 or lower-level functions.
 
 ## Index

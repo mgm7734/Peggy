@@ -1,9 +1,3 @@
-#function Base.show(io::IO, parser::Parser) 
-#  Base.print(io, "parser(")
-#    showparser(io, parser)
-#    Base.print(io, ")")
-#end
-
 function Base.show(io::IO, ::MIME"text/plain", p::Parser) 
     print(io, "@peg(")
     pretty(io, p)

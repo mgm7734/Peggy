@@ -7,15 +7,6 @@ A `Peggy.Parser` is function that takes a string as input and returns its parsed
 """
 abstract type Parser end
     
-function canmatchempty(p::Parser)
-    @warn("maybempty not defined for $(typeof(p))")
-    true
-end
-peggy(p::Parser) = p
-
-peggy(s::AbstractString; whitespace=r"[[:space:]]*") = 
-    RegexParser(Regex("\\Q$s\\E"); canmatchempty=(length(s) == 0), whitespace, pretty=sprint(show, s))
-
 struct RegexParser <: Parser
     re::Regex
     canmatchempty::Bool
@@ -31,64 +22,10 @@ function valueAndConsume(p::RegexParser, s::AbstractString)
     m === nothing && return nothing
     (value=m["value"], consume=m.match.ncodeunits)
 end
-peggy(r::Regex) = RegexParser(r)
 
 struct Not{T<:Parser} <: Parser
     expr::T
 end
-"""
-   !(p::Parser) == not(p)
-"""
-Base.:(!)(p::Parser) = Not(p)
-"""
-    not(p)
-
-Create a parser that fails if parser `p` succeeds. Otherwise it succeeds with value `()`
-"""
-not(p) = Not(peggy(p))
-
-"""
-    CHAR(charclass::String)
-
-Create a parser for a single character matchng regex character classes. 
-
-Functionally identical to Regex("[\$charclass]") except it is known to never match an
-empty string.  This is important to avoid unneccesary and expensive left-recursion
-overhead.
-
-# Examples
-
-```jldoctet
-julia> g = @grammar begin
-       number = [ digit ds:(digit...)  { parse(Int, *(digit, ds...)) } ]
-       digit = CHAR("[:digit:]")
-       end;
-
-julia> g("1234")
-1234
-```
-
-"""
-function CHAR(charclass::String) 
-    try 
-        RegexParser(Regex("[$charclass]"); canmatchempty=false, pretty="CHAR(\"$charclass\"")
-    catch ex
-        error("Invalid characer class \"$charclass\" ($( ex.msg ))")
-        print(e)
-    end
-end
-
-const _ANY = RegexParser(r"."; canmatchempty=false, pretty="ANY()")
-"""
-A PEG parser that matches any character and yields it as a string.
-"""
-ANY() = _ANY
-
-const _END = Peggy.Not(_ANY)
-"""
-A PEG parser that matches the end of the input; yields result `()`.
-"""
-END() = _END
 
 struct NamedSequence <: Parser
     items::Vector{@NamedTuple{name::Symbol, parser::Parser,keepvalue::Bool}}
@@ -109,27 +46,10 @@ struct NamedSequence <: Parser
     end
     #function NamedSequence(items::Vector{SeqItem}) 
 end
-sequence(items) = NamedSequence(items)
-#Sequence(items) = sequence(items)
-peggy(item1, item2, items...) = NamedSequence([item1, item2, items...])
-peggy(items::Tuple) = NamedSequence(collect(items))
 
 struct OneOf <: Parser
     exprs
 end
-"""
-     p1::Parser | p2::Parser == oneof(p1, p2)
-
-A short-form for [`oneof`](@ref).
-"""
-Base.:(|)(a::Parser, b::Parser) = OneOf([a, b])
-
-"""
-    oneof(pegexpr...)
-
-Create a parser for ordered alternatives.
-"""
-oneof(expr...) = OneOf(map(peggy, expr))
 
 struct Many <: Parser
     expr::Parser
@@ -137,61 +57,23 @@ struct Many <: Parser
     max
 end
 Many(e) = Many(e, 0, missing)
-"""
-    p::Parser * n == many(p; min=n)
-    p::Parser * (a:b) == many(p; min=a, max=b)
-"""
-Base.:(*)(p::Parser, minimum::Int) = Many(p, minimum, missing)
-Base.:(*)(p::Parser, minmax::UnitRange) = Many(p, minmax.start, minmax.stop)
-"""
-    many(exprs...; min=0, max=missing)
-
-Create a parser that matches zero or more repititions of the sequence `expr...`; returns a vector of results.
-"""
-many(pegexpr...; min=0, max=missing) = Many(peggy(pegexpr...),min,max)
 
 struct Fail <: Parser
     message
 end
 
-"""
-    fail(message) => Parser
-
-A parser that always fails with the given message.
-
-Useful for error messages.
-"""
-fail = Fail
-
 struct LookAhead <: Parser
     expr
 end
-"""
-    followedby(expr...)
-    !!(e::Parser)
-
-Create a parser that matches `expr` but consumes nothing.
-"""
-followedby(e...) = not(not(peggy(e...))) #LookAhead(parser(e))
 
 struct Map <: Parser
     callable
     expr::Parser
 end
-function peggy(pair::Pair) 
-    (p, v) = pair
-    fn = if (!isa(v, Function) && isempty(methods(v)))
-        fn = _ -> v
-    else
-        v
-    end
-    Map(fn, peggy(p))
-end
 
 struct GramRef <: Parser
     sym::Symbol
 end
-peggy(s::Symbol) = GramRef(s)
 
 struct LeftRecursive <: Parser
     parser:: Parser
@@ -206,19 +88,6 @@ struct Grammar <: Parser
         new(root, Dict(n => compile(c, n) for n in keys(dict)))
     end
 end
-"""
-    grammar([start::Symbol], (symbol => peg_expr)...)
-
-Create a parser from a set of productions, which are named, mutually recursive parsers.  
-
-Parsers that are members of a grammar can reference are member parser by their symbol.
-
-If `start` is omitted, the symbol of the first production is used.
-"""
-function grammar(start::Symbol, rules::Pair{Symbol}...) 
-    Grammar(GramRef(start), Dict(s => peggy(x) for (s,x) in rules))
-end
-grammar(rules::Pair{Symbol}...) = grammar(first(rules).first, rules...)
 
 struct Compiler
     parser::Dict{Symbol,Parser}
@@ -267,3 +136,7 @@ canmatchempty(c, p::Map) = canmatchempty(c, p.expr)
 canmatchempty(c, p::RegexParser) = p.canmatchempty
 canmatchempty(c, p::Union{LookAhead,Not}) = true
 canmatchempty(c, p::Fail) = false
+function canmatchempty(p::Parser)
+    @warn("maybempty not defined for $(typeof(p))")
+    true
+end

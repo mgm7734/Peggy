@@ -8,7 +8,7 @@ current_line = nothing
 report(message) = error("$message\nin expression starting at $(current_line.file):$(current_line.line)")
 
 """
-Create a [`Peggy.Parser`](@ref) from a [`Peggy expression`](#Peggy-expressions)
+Create a [`Peggy.Parser`](@ref) from a [Peggy expression](@ref)
 """
 macro peg(expr)
     global current_line
@@ -80,7 +80,7 @@ function peg(expr::Expr)
         parsers = map(peg, e)
         Expr(:call, op, parsers...)
     else
-        expr
+        :(peggy($expr))
     end
 end
 

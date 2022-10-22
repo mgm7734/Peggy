@@ -70,7 +70,19 @@ function runpeg(parser::Parser, input::AbstractString)
     end
     value(st)
 end
-runpeg(p, i) = runpeg(parser(p), i)
+runpeg(p, i) = runpeg(peggy(p), i)
+
+"""
+    tryparse(parser, input)
+
+Like `parser(input)`, but returns `nothing` if the parse fails.
+"""
+function Base.tryparse(parser::Parser, input::AbstractString)
+    st = State(input)
+    if !isfail(calcnextstate!(st, parser)) 
+        value(st)
+    end
+end
 
 (parser::Parser)(input) = runpeg(parser, input)
 

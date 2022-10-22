@@ -22,6 +22,8 @@ using Test
         @test runpeg(p, "XXaX b cd") == ("a", "b", "c")
         @test_throws ["ParseException"] runpeg(p, "aXXc")
         @test_throws ["ParseException"] runpeg(p, " abc")
+
+        @test tryparse(p, " abc") === nothing
     end
 
    # p = peggy("abc")
