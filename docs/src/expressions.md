@@ -166,14 +166,14 @@ julia> ( @peg( CHAR["[:alpha:]"]*_ ) )("ok")
 
 ## Grammar
 
-Here's the PEG syntax from ["wikipedia"](https://en.wikipedia.org/wiki/Parsing_expression_grammar)
+Here's the PEG syntax from wikipedia's [Parsing expression grammar](https://en.wikipedia.org/wiki/Parsing_expression_grammar) article:
 
 ```jldoctest peggy
 julia> wikisyntax = @peg begin
        grammar = { rules=rule+_             :> { grammar(rules...) } }
        rule = { name "←" expr               :> { name => expr }}
        expr = { alt as={ "/" alt }*_        :> { oneof(alt, as...)} }
-       alt =  { is=item+_                   :> { peggy((:_=>i for i in is)...) } }
+       alt =  { is=item+_                   :> { peggy(is...) } }
        item = {
             prim "*"                        :> { many(prim) }
             prim "+"                        :> { many(prim; min=1) }
