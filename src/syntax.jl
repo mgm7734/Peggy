@@ -11,11 +11,11 @@ Each expr can be one of the following.
  - `String` - matches & yields the string literal
  - `Regex` - matches the `Regex` and yields the match value (but avoid this)
  - `Symbol` - matches to expression associated with the symbol in a [`grammar`](@ref).
- - `Symbol => expr` - matches `expr` and assign it a names. 
+ - `Symbol => expr` - matches `expr` and assign it a name. 
  - `expr => callable` - matches `expr` and yields result of applying `callable` to its value.
- - `peg_epxr => k` - short-hand for `expr` => _ -> k`
+ - `expr => k` - short-hand for `expr` => _ -> k`
  - `(expr, exprs...)` - same as `peggy(expr, exprs...)`
- - `[expr, exprs...]` - same as `many(expr, exprs; max=1)`
+ - `[expr, exprs...]` - same as [`many(expr, exprs; max=1)`](@ref)
  - `Parser` - any expression that yields a parser
 
 # Names and sequence results
@@ -51,7 +51,7 @@ function peggy(pair::Pair)
 end
 
 """
-    grammar([start::Symbol], (symbol => peg_expr)...)
+    grammar([start::Symbol], (symbol => expr)...)
 
 Create a parser from a set of productions, which are named, mutually recursive parsers.  
 

@@ -64,7 +64,7 @@ using Test
         p = @peg begin
             start = { as END() }
             as = { 
-                as "a"  :> { as * "a" }
+                as "a"  :> ( as * "a" )
                 "a" 
             }
         end
@@ -74,23 +74,23 @@ using Test
             start = { _sp expr END() }
             _sp = CHAR(raw"\s")*_ 
             expr = { 
-                var "=" expr        :> { ("=", var, expr) }
+                var "=" expr        :> ("=", var, expr)
                 term 
             }
             term = { 
-                term op=("+" | "-") prod    :> { (op, term, prod) }
+                term op=("+" | "-") prod    :> (op, term, prod)
                 prod 
             }
             prod = { 
-                prod op={ "*" ; "|" } prim  :> { (op, prod, prim) }
+                prod op={ "*" ; "|" } prim  :> (op, prod, prim)
                 prim 
             }
             prim = { 
-                "-" prim        :> { ("neg", prim) }        
+                "-" prim        :> ("neg", prim)        
                 "(" exp ")" ; var ; number
             }
-            number = { ds=CHAR(raw"\d")+_ _sp      :> { parse(Int, *(ds...)) }  }
-            var = { c=CHAR("_[:alpha:]") cs=CHAR("_[:alnum:]")*_ _sp   :> { Symbol(*(c, cs...)) } }
+            number = { ds=CHAR(raw"\d")+_ _sp      :> parse(Int, *(ds...))  }
+            var = { c=CHAR("_[:alpha:]") cs=CHAR("_[:alnum:]")*_ _sp   :> Symbol(*(c, cs...)) }
         end
         @test toylang("a = b = c + 3*e - f") == ("=", :a, ("=", :b, ("-", ("+", :c, ("*", 3, :e)), :f)))
     end
@@ -101,12 +101,12 @@ using Test
             g = @peg begin
                 test = {
                     as END() 
-                    "action" test :> { (test, length(test)) }
-                    "function" test :> length
-                    "function2" as "," as :> identity
-                    "number" ds=CHAR["[:digit:]"]+_ :> {parse(Int, *(ds...))}
+                    "action" test :> (test, length(test))
+                    "function" test :|> length
+                    "function2" as "," as :|> identity
+                    "number" ds=CHAR["[:digit:]"]+_ :> parse(Int, *(ds...))
                 }
-                as = {as "a" :> { as * "a" }; "a"}
+                as = {as "a" :> ( as * "a" ) ; "a"}
             end
             @test g(repeat("a", 3)) == repeat("a", 3)
             @test g("action aaaa") == ("aaaa", 4)
@@ -151,8 +151,8 @@ using Test
             @test @peg( "a" )( "abc" ) == "a"
             @test @peg(  Map(identity, @peg "a") )( "abc" ) == "a"
             @test @peg( { "a" } )( "abc" ) == "a"
-            @test @peg( { "a" :> identity } )( "abc" ) == "a"
-            @test @peg( { a="a" :> { a } } )( "abc" ) == "a"
+            @test @peg( { "a" :|> identity } )( "abc" ) == "a"
+            @test @peg( { a="a" :> a } )( "abc" ) == "a"
 
             @test @peg({ a="a" "←" b="b" })("a  ← b ") == ("a", "b")
 
@@ -203,13 +203,13 @@ using Test
                 "" expr END()
             }
             expr = { 
-                expr "+" term   :> { expr + term }
-                expr "-" term   :> { expr - term }
+                expr "+" term   :> ( expr + term )
+                expr "-" term   :> ( expr - term )
                 term
             }
             term = {
-                term "*" prim   :> { term * prim }
-                term "/" prim   :> { term / prim }
+                term "*" prim   :> ( term * prim )
+                term "/" prim   :> ( term / prim )
                 prim
             }
             prim = {
@@ -217,7 +217,7 @@ using Test
                 number 
             }
             number = {
-                ds=CHAR("[:digit:]")+_ ""    :> { parse(Int, *(ds...)) }
+                ds=CHAR("[:digit:]")+_ ""    :> parse(Int, *(ds...))
             }
         end
         @test g("1 + 2*3 + 30 / 3 / 2 - 4") == 8

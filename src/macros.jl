@@ -118,20 +118,30 @@ function pegrow(row)
 end
 
 function pegfnseq(args)
+    action = nothing
     fn = nothing
     if length(args) > 2 && args[end-1] == :(:>)
+        action = args[end]
+        if @capture(action, { wrappedaction_ })
+            @warn "deprecated wrapped action" action
+            action = wrappedaction
+        end
+        args = args[1:end-2]
+    elseif length(args) > 2 && args[end-1] == :(:|>)
         fn = args[end]
         args = args[1:end-2]
     end
     namedpegs = map(pegseqitem, args)
-    if fn !== nothing && @capture(fn, { action_ })
-        if !any(hasvar, namedpegs)
-            namedpegs = [ (Symbol("x$i"), p) for (i, (_n, p)) in enumerate(namedpegs) ]
-        end
+    if action !== nothing
         params = first.(filter(hasvar, namedpegs))
-        fn = :( ($(params...),) -> $action )
-        if length(params) != 1
-            fn = :( Base.splat($fn) )
+        fn = if isempty(params)
+            :((_...) -> $action)
+        elseif length(params) == 1
+            :( $(params[1]) -> $action )
+        else
+            :(vec -> let ( $(params...), ) = vec
+                $action 
+            end)
         end
     end
     items = [:(tuple($(Expr(:quote, n)), $p)) for (n,p) in namedpegs]

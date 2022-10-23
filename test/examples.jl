@@ -1,11 +1,11 @@
 using Peggy
 
-#=
+# #=
 """
 Adapted from [this article](https://pdos.csail.mit.edu/~baford/packrat/thesis/thesis.pdf)
 """
 peg_grammar = grammar(
-    :start => [:spaces, :grammar, END] => x -> x[2],
+    :start => (:spaces, :grammar, END()) => x -> x[2],
 
     :grammar => [:production, many(:production)] => 
                     x-> parser([x[1], x[2]...]),

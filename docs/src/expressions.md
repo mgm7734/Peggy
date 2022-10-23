@@ -1,6 +1,6 @@
 # Peggy expression
 
-Use [`@peg`](@ref) to create a parser.  You can also use the underly constructor functions which
+Use [`@peg`](@ref) to create a parser.  You can also use the lower-level constructor functions which
 is occasionally useful.
 
 All examples assume you have installed Peggy.jl and loaded the package with
@@ -96,7 +96,7 @@ Each sequence items has a name.  Grammar references are already a name.  Other t
 
 Items with names that start with "_" are discared.   If only one item remains, its value becomes the value of the sequence.
 Otherwise the value is a tuple of the named item values.
-
+s
 ```jldoctest peggy
 julia> (@peg { result="a"*_ "b" END() })( "aaab" ) 
 3-element Vector{SubString{String}}:
@@ -105,31 +105,44 @@ julia> (@peg { result="a"*_ "b" END() })( "aaab" )
  "a"
 ```
 
-### Mapping
+## Mapping
+
+```julia
+peggy(expr => fn)
+@peg { expr... :|> fn }
+@peg { expr... :> action }
+```
+
+Mapping creates a parser that applies a function to the result of another parser.
+
+`@peg` will create the mapping function for a sequence from an `action` which is a Julia expression 
+with the names of the sequence items bound to their values.
 
 ```jldoctest peggy
-julia> (@peg { as="a"*_ "b" END()  :> { length(as) } })( "aaab" ) 
+julia> peggy( many("a") => length )("aaaa")
+4
+
+julia> (@peg { as="a"*_ "b" END()  :|> length })( "aaab" ) 
 3
-```
-```jldoctest peggy
-julia> (@peg { as="a"*_ "b" END()  :> length })( "aaab" ) 
-3
+
+julia> (@peg { as="a"*_ bs="b"*_ END()  :> (length(as), length(bs)) })( "aab" ) 
+(2, 1)
 ```
 !!! warning "Squirrely Curly"
     Julia's parsing of curly-braces is mostly the same as for square-brackets.  But it has a strange interaction with unary
     operators.
-```jldoctest
-julia> Meta.show_sexpr(:( !{ a } ))
-(:curly, :!, :a)
-julia> Meta.show_sexpr(:( ![ a ] ))
-(:call, :!, (:vect, :a))
-```
+    ```jldoctest
+    julia> Meta.show_sexpr(:( !{ a } ))
+    (:curly, :!, :a)
+    julia> Meta.show_sexpr(:( ![ a ] ))
+    (:call, :!, (:vect, :a))
+    ```
 
-Use parentheses to avoid problems:
-```jldoctest
-julia> Meta.show_sexpr(:( !({ a }) ))
-(:call, :!, (:braces, :a))
-```
+    Use parentheses to avoid problems:
+    ```jldoctest
+    julia> Meta.show_sexpr(:( !({ a }) ))
+    (:call, :!, (:braces, :a))
+     ```
 
 ## End of string
 
@@ -170,32 +183,32 @@ Here's the PEG syntax from wikipedia's [Parsing expression grammar](https://en.w
 
 ```jldoctest peggy
 julia> wikisyntax = @peg begin
-       grammar = { rules=rule+_             :> { grammar(rules...) } }
-       rule = { name "←" expr               :> { name => expr }}
-       expr = { alt as={ "/" alt }*_        :> { oneof(alt, as...)} }
-       alt =  { is=item+_                   :> { peggy(is...) } }
+       grammar = { rules=rule+_             :> grammar(rules...) }
+       rule = { name "←" expr               :> name => expr}
+       expr = { alt as={ "/" alt }*_        :>  oneof(alt, as...) }
+       alt =  { is=item+_                   :> peggy(is...) }
        item = {
-            prim "*"                        :> { many(prim) }
-            prim "+"                        :> { many(prim; min=1) }
-            prim "?"                        :> { many(prim; max=1) }
-            "&" prim                        :> { followedby(prim) }
-            "!" item                        :> { !item }
+            prim "*"                        :> many(prim)
+            prim "+"                        :> many(prim; min=1)
+            prim "?"                        :> many(prim; max=1)
+            "&" prim                        :> followedby(prim)
+            "!" item                        :> !item
             prim
        }
        prim = { 
             name !"←" 
-            "[" charclass "]"               :> { CHAR(charclass) }
-            "'" string "'"                  :> { peggy(string) }
+            "[" charclass "]"               :> CHAR(charclass)
+            "'" string "'"                  :> peggy(string)
             "(" expr ")" 
-            "."                             :> _ -> ANY()
+            "."                             :|> _ -> ANY()
        }
-       name = { cs=CHAR("[:alpha:]_")+_ CHAR(raw"\s")*_     :> { Symbol(cs...) } }
+       name = { cs=CHAR("[:alpha:]_")+_ CHAR(raw"\s")*_     :> Symbol(cs...) }
        charclass = {
-            "-" [ "]" ] CHAR("^]")*_        :> t -> string(t[1], t[2]..., t[3]...)
-            "]" CHAR("^]")*_                :> t -> string(t[1], t[2]...)
-            CHAR("^]")+_                    :> t -> string(t...)
+            "-" [ "]" ] CHAR("^]")*_        :|> t -> string(t[1], t[2]..., t[3]...)
+            "]" CHAR("^]")*_                :|> t -> string(t[1], t[2]...)
+            CHAR("^]")+_                    :|> t -> string(t...)
        }
-       string = { ({ "''" :> _->"'" } | CHAR("^'"))*_  :> Base.splat(*) }
+       string = { ({ "''" :> _->"'" } | CHAR("^'"))*_  :|> Base.splat(*) }
        end;
 ```
 
@@ -215,6 +228,9 @@ end)
 ```
 
 ```jldoctest peggy
+julia> S("aabbcc")
+("b", Tuple{SubString{String}, Vector{Any}, SubString{String}}[("b", [], "c")], "c")
+
 julia> S("aabbc")
 ERROR: ParseException @ (no file):1:6
 aabbc
@@ -224,6 +240,30 @@ expected: "c"
 ```
 
 ### Left recursion
+
+Left-associative operations need left recursive rules:
+
+```jldoctest peggy
+julia> badcalc = @peg begin
+       term = { number "-" term           :> (number - term) ; number }
+       number = { ds=CHAR("[:digit:]")+_  :> parse(Int, *(ds...))  }
+       end;
+
+julia> badcalc("10-2-2")
+10
+```
+
+Peggy handles them:
+```jldoctest peggy
+julia> calc = @peg begin
+       term = { term "-" number           :> (term - number) ; number }
+       number = { ds=CHAR("[:digit:]")+_  :> parse(Int, *(ds...))  }
+       end;
+
+julia> calc("10-2-2")
+6
+```
+Peggy detects direct and indirect left-recursion. Surprisingly, the perfomance penalty is small and  uses dramatically less stack than badcalc. 
 
 ## Not
 
@@ -235,12 +275,12 @@ expected: "c"
 
 ```jldoctest peggy
 julia> p = @peg begin
-           cmd = { "say" word  :> { "You said: $word" } }
-           word = { 
-        !"FLA" cs=CHAR("[:alpha:]")+_  :> { *(cs...) } 
-        "FLA" fail("don't say FLA")
+       cmd = { "say" word                 :> "You said: $word" }
+       word = { 
+          !"FLA" cs=CHAR("[:alpha:]")+_   :> ( *(cs...) )
+          "FLA" fail("don't say FLA")
            }
-           end;
+       end;
 
 julia> p("say hello")
 "You said: hello"
