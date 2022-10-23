@@ -111,19 +111,6 @@ function parse!(st::State, parser::RegexParser)
     end
 end
 
-#function parse!(st::State, p::Sequence) 
-#    values = [] 
-#    for p′ in p.exprs
-#         parse!(st, p′)
-#        if isfail(st)
-#            return st
-#        end
-#        push!(values, value(st))
-#    end
-#    # debug && @info "chain" values 
-#    succeed!(st, tuple(values...))
-#end
-
 function parse!(st::State, p::NamedSequence) 
     values = [] 
     for item in p.items
@@ -138,20 +125,6 @@ function parse!(st::State, p::NamedSequence)
     v = length(values) == 0 ? () : length(values) == 1 ? first(values) : tuple(values...)
     succeed!(st, v)
 end
-
-#function parse!(st::State, p::MappedSequence) 
-#    values = [] 
-#    for item in p.namedparsers
-#        if isfail(parse!(st, item.parser))
-#            return st
-#        end
-#        if (item.keepvalue)
-#            push!(values, value(st))
-#        end
-#    end
-#    v = p.callable(values...)
-#    succeed!(st, v)
-#end
 
 function parse!(st::State, parser::OneOf)
     ix = st.index
@@ -224,13 +197,13 @@ end
 
 function parse!(st::State, ref::GramRef)
     expr = st.productions[ref.sym]
-    savedresult = cachedresult!(st, ref, expr)
+    savedresult = getsavedresult!(st, ref, expr)
     st.index = savedresult.endindex
     st.value = savedresult.value
     st
 end
 
-function cachedresult!(st, ref, expr)
+function getsavedresult!(st, ref, expr)
     refcache = cacheForGramRef(st.resultcache, ref)
     get!(refcache, st.index) do
         parse!(st, expr)
@@ -238,7 +211,7 @@ function cachedresult!(st, ref, expr)
     end
 end
 
-function cachedresult!(st, ref, lr::LeftRecursive)
+function getsavedresult!(st, ref, lr::LeftRecursive)
     refcache = cacheForGramRef(st.resultcache, ref)
     startindex = st.index
     buildresult = false
